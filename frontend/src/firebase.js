@@ -3,15 +3,14 @@ import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDqLUMVbmfVDSmXT2VjvF4LXK52yNCmJmE",
-  authDomain: "campusdelivery-8513e.firebaseapp.com",
-  projectId: "campusdelivery-8513e",
-  storageBucket: "campusdelivery-8513e.firebasestorage.app",
-  messagingSenderId: "981776681757",
-  appId: "1:981776681757:web:3b5cf1be7e5dede5382ff4",
-  measurementId: "G-Y3VYT5RVSX"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
