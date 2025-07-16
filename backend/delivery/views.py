@@ -2,8 +2,8 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Delivery
-from .serializers import DeliverySerializer, DeliveryAssignSerializer, DeliveryStatusSerializer
+from .models import Delivery, DeliverySchedule
+from .serializers import DeliverySerializer, DeliveryAssignSerializer, DeliveryStatusSerializer, DeliveryScheduleSerializer
 from .permissions import IsAdminOrDeliveryPerson
 from orders.models import Order
 from users.models import User
@@ -49,3 +49,23 @@ class DeliveryStatusView(generics.UpdateAPIView):
     
     def perform_update(self, serializer):
         serializer.save()
+
+class DeliveryScheduleView(generics.CreateAPIView):
+    queryset = DeliverySchedule.objects.all()
+    serializer_class = DeliveryScheduleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        delivery_id = data.get('delivery')
+        try:
+            delivery = Delivery.objects.get(id=delivery_id)
+            # Check if the delivery belongs to the requesting user
+            if delivery.order.customer != request.user:
+                return Response({"detail": "Not authorized to schedule this delivery"}, status=status.HTTP_403_FORBIDDEN)
+        except Delivery.DoesNotExist:
+            return Response({"detail": "Delivery not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(delivery=delivery)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

@@ -7,6 +7,14 @@ from .models import Cart, CartItem, Order, Coupon
 from .serializers import CartSerializer, OrderSerializer, OrderStatusSerializer, CouponSerializer
 from products.models import Product
 from rest_framework import generics
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.utils.decorators import method_decorator
+from rest_framework_simplejwt.authentication import JWTAuthentication
+import json
+import requests
+import random
+from django.core.mail import send_mail
 
 class CouponCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -38,9 +46,10 @@ class CouponApplyView(APIView):
 
         return Response({'code': coupon.code, 'discount': discount})
 
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 class CartView(APIView):
-    # authentication_classes = [TokenAuthentication, SessionAuthentication, BasicAuthentication]
-    authentication_classes = [SessionAuthentication]
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
     permission_classes = [AllowAny]  # Allow any user to access the cart
 
     def get(self, request):
@@ -193,14 +202,20 @@ class CartView(APIView):
 
         return Response({'cart': serializer.data})
 
+
+
+
 class OrderListCreateView(generics.ListCreateAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    authentication_classes = [SessionAuthentication, BasicAuthentication, TokenAuthentication]
+    authentication_classes = [JWTAuthentication]  # ✅ Use JWT for auth
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(customer=self.request.user)
+        # Generate a unique reference for the order
+        reference = f'ref-{random.randint(100000, 999999999)}'
+        serializer.save(customer=self.request.user, reference=reference, status='pending')
+
 
 class OrderDetailView(generics.RetrieveAPIView):
     queryset = Order.objects.all()
@@ -213,3 +228,6 @@ class OrderStatusView(generics.UpdateAPIView):
     serializer_class = OrderStatusSerializer
     authentication_classes = [SessionAuthentication, BasicAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
+
+
+

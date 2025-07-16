@@ -1,0 +1,242 @@
+import { useLocation } from "react-router-dom";
+import { AuthContext } from "../contexts/AuthContext";
+import PayButton from "../components/PayButton";
+
+import React, { useState, useContext } from "react";
+import { useLocation } from "react-router-dom";
+import { AuthContext } from "../contexts/AuthContext";
+import PayButton from "../components/PayButton";
+import axios from "../api";
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+const PaymentMethodPage = () => {
+  const location = useLocation();
+  const { user } = useContext(AuthContext);
+  const cartItems = location.state?.cartItems || [];
+
+  // Order summary data (can be derived from cartItems or static for now)
+  const orderSummary = {
+    items: cartItems.reduce((acc, item) => acc + item.quantity, 0),
+    subTotal: cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0),
+    shipping: 30,
+    couponDiscount: 30,
+  };
+  orderSummary.total = orderSummary.subTotal + orderSummary.shipping - orderSummary.couponDiscount;
+
+  const [selectedPayment, setSelectedPayment] = useState("mpesa");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [countryCode, setCountryCode] = useState("+254");
+
+  const handleCheckoutNow = () => {
+    if (selectedPayment === "mpesa") {
+      if (!phoneNumber) {
+        alert("Please enter your phone number for Mpesa payment.");
+        return;
+      }
+      // Example: Call backend API to initiate STK push
+      fetch("http://localhost:8000/api/initiate-stk-push/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: countryCode + phoneNumber,
+          amount: orderSummary.total,
+        }),
+      })
+        .then((res) => res.json())
+        .then((response) => {
+          // Callback function for STK push response
+          console.log("STK push initiated. Reference:", response.reference);
+
+          alert("STK push sent. Please approve payment on your phone...");
+
+          // Send the reference to your backend for delayed verification
+          fetch("http://localhost:8000/api/verify-payment/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ reference: response.reference }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.status === "success" || data.status === "completed") {
+                alert("✅ Payment verified!");
+              } else if (data.status === "pending") {
+                alert("⏳ Payment is pending. Please wait or check again shortly.");
+              } else {
+                alert("❌ Payment failed or could not be verified.");
+              }
+            })
+            .catch((err) => {
+              console.error("Verification failed:", err);
+              alert("⚠️ Verification failed. Try again in a moment.");
+            });
+        })
+        .catch((err) => {
+          console.error("STK push initiation failed:", err);
+          alert("Failed to initiate Mpesa payment. Please try again.");
+        });
+    } else {
+      alert("Checkout now clicked with payment method: " + selectedPayment + ", phone: " + countryCode + " " + phoneNumber);
+    }
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto p-6">
+      {/* Breadcrumb */}
+      <nav className="text-sm text-gray-600 mb-6">
+        Home {'>'} Shopping Cart {'>'} Payment Method
+      </nav>
+
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Left Column */}
+        <div className="flex-1 bg-white rounded-lg shadow p-6 space-y-6">
+          <h2 className="text-xl font-bold mb-1">Payment Method</h2>
+          <p className="text-gray-400 mb-4">Trusted Payment, 100% Money Back Guarantee</p>
+
+          {/* Payment Options */}
+          {/* ... existing payment options code ... */}
+
+          {/* Replace Checkout Now Button with PayButton */}
+          <PayButton email={user?.email} amount={orderSummary.total} />
+        </div>
+
+        {/* Right Column - Order Summary */}
+        <div className="w-80 border border-gray-300 rounded p-4 h-fit">
+          <h3 className="font-semibold mb-4">Order Summary</h3>
+          <div className="flex justify-between mb-2">
+            <span>Items</span>
+            <span>{orderSummary.items}</span>
+          </div>
+          <div className="flex justify-between mb-2">
+            <span>Sub Total</span>
+            <span>Ksh {orderSummary.subTotal.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between mb-2">
+            <span>Shipping</span>
+            <span>Ksh {orderSummary.shipping.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between mb-4">
+            <span>Coupon Discount</span>
+            <span className="text-red-600">-Ksh {orderSummary.couponDiscount.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between font-semibold text-lg mb-4">
+            <span>Total</span>
+            <span>Ksh {orderSummary.total.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+=======
+const PaymentMethodPage = () => {
+  const location = useLocation();
+  const { user, token } = useContext(AuthContext);
+  const cartItems = location.state?.cartItems || [];
+
+  // Order summary data (can be derived from cartItems or static for now)
+  const orderSummary = {
+    items: cartItems.reduce((acc, item) => acc + item.quantity, 0),
+    subTotal: cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0),
+    shipping: 30,
+    couponDiscount: 30,
+  };
+  orderSummary.total = orderSummary.subTotal + orderSummary.shipping - orderSummary.couponDiscount;
+
+  const [orderId, setOrderId] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Function to create order before payment
+  const createOrder = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.post(
+        "/api/orders/",
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setOrderId(response.data.id);
+      setLoading(false);
+      return response.data.id;
+    } catch (error) {
+      setLoading(false);
+      console.error("Error creating order:", error);
+      alert("Failed to create order. Please try again.");
+      return null;
+    }
+  };
+
+  const handlePayment = async () => {
+    if (!orderId) {
+      const createdOrderId = await createOrder();
+      if (!createdOrderId) return;
+    }
+    // Proceed with payment using PayButton with orderId
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto p-6">
+      {/* Breadcrumb */}
+      <nav className="text-sm text-gray-600 mb-6">
+        Home {'>'} Shopping Cart {'>'} Payment Method
+      </nav>
+
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Left Column */}
+        <div className="flex-1 bg-white rounded-lg shadow p-6 space-y-6">
+          <h2 className="text-xl font-bold mb-1">Payment Method</h2>
+          <p className="text-gray-400 mb-4">Trusted Payment, 100% Money Back Guarantee</p>
+
+          {/* Payment Options */}
+          {/* ... existing payment options code ... */}
+
+          {/* Replace Checkout Now Button with PayButton */}
+          {!loading && orderId ? (
+            <PayButton email={user?.email} amount={orderSummary.total} orderId={orderId} />
+          ) : (
+            <button
+              onClick={handlePayment}
+              disabled={loading}
+              className="w-full bg-blue-700 text-white py-3 rounded hover:bg-blue-800 transition"
+            >
+              {loading ? "Creating Order..." : "Proceed to Payment"}
+            </button>
+          )}
+        </div>
+
+        {/* Right Column - Order Summary */}
+        <div className="w-80 border border-gray-300 rounded p-4 h-fit">
+          <h3 className="font-semibold mb-4">Order Summary</h3>
+          <div className="flex justify-between mb-2">
+            <span>Items</span>
+            <span>{orderSummary.items}</span>
+          </div>
+          <div className="flex justify-between mb-2">
+            <span>Sub Total</span>
+            <span>Ksh {orderSummary.subTotal.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between mb-2">
+            <span>Shipping</span>
+            <span>Ksh {orderSummary.shipping.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between mb-4">
+            <span>Coupon Discount</span>
+            <span className="text-red-600">-Ksh {orderSummary.couponDiscount.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between font-semibold text-lg mb-4">
+            <span>Total</span>
+            <span>Ksh {orderSummary.total.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

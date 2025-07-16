@@ -1,128 +1,144 @@
-import React, { useState } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import axios from "axios";
+import { AuthContext } from "../contexts/AuthContext";
 
 const PaymentMethodPage = () => {
   const location = useLocation();
+  const { user } = useContext(AuthContext);
   const cartItems = location.state?.cartItems || [];
 
-  // Order summary data (can be derived from cartItems or static for now)
+  const [loading, setLoading] = useState(false);
+  const [orderId, setOrderId] = useState(null);
+
   const orderSummary = {
     items: cartItems.reduce((acc, item) => acc + item.quantity, 0),
     subTotal: cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0),
-    shipping: 100,
-    couponDiscount: 29,
+    shipping: 30,
+    couponDiscount: 30,
   };
   orderSummary.total = orderSummary.subTotal + orderSummary.shipping - orderSummary.couponDiscount;
 
-  const [selectedPayment, setSelectedPayment] = useState("mpesa");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [countryCode, setCountryCode] = useState("+254");
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
 
-  const handleCheckoutNow = () => {
-    // Implement checkout logic here
-    alert("Checkout now clicked with payment method: " + selectedPayment + ", phone: " + countryCode + " " + phoneNumber);
+  const handlePayNow = async () => {
+    if (!window.PaystackPop || !user?.email) {
+      alert("Paystack is not ready or user not logged in");
+      return;
+    }
+
+    const token = localStorage.getItem("authToken"); // Corrected key to match AuthContext storage
+
+    if (!token) {
+      alert("User token not found. Please log in again.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // ✅ Step 1: Create order with Authorization header
+      // Prepare items payload with product_id and quantity only
+      const itemsPayload = cartItems.map(item => ({
+        product_id: item.id,
+        quantity: item.quantity
+      }));
+
+      const orderRes = await axios.post(
+        "http://localhost:8000/api/orders/",
+        {
+          items: itemsPayload,
+          total_price: orderSummary.total
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const newOrderId = orderRes.data.id;
+      setOrderId(newOrderId);
+
+      // ✅ Step 2: Setup Paystack
+      const paystack = window.PaystackPop.setup({
+        key: "pk_live_d7fc744f5c675064ada774e4530c5ce55958a17b",
+        email: user.email,
+        amount: orderSummary.total * 100,
+        currency: "KES",
+        ref:  `ref-${Date.now()}`,
+        metadata: {
+          custom_fields: [
+            {
+              display_name: "Order ID",
+              variable_name: "order_id",
+              value: newOrderId,
+            },
+          ],
+        },
+        callback: function (response) {
+          console.log("✅ Payment complete! Reference:", response.reference);
+
+          // ✅ Step 3: Verify payment with Auth header
+          axios
+            .post(
+              "http://localhost:8000/api/verify-payment/",
+              { reference: response.reference },
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            )
+            .then((res) => {
+              alert("✅ Payment verified and saved!");
+              console.log("🔁 Verification response:", res.data);
+            })
+            .catch((err) => {
+              console.error("❌ Verification error:", err.response?.data || err.message);
+              alert("Payment made but verification failed.");
+            })
+            .finally(() => setLoading(false));
+        },
+        onClose: function () {
+          alert("Payment popup closed.");
+          setLoading(false);
+        },
+      });
+
+      paystack.openIframe();
+    } catch (err) {
+      console.error("❌ Order creation or Paystack error:", err.response?.data || err.message);
+      alert("Failed to create order. Please try again.");
+      setLoading(false);
+    }
   };
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      {/* Breadcrumb */}
       <nav className="text-sm text-gray-600 mb-6">
         Home {'>'} Shopping Cart {'>'} Payment Method
       </nav>
 
       <div className="flex flex-col md:flex-row gap-6">
-        {/* Left Column */}
         <div className="flex-1 bg-white rounded-lg shadow p-6 space-y-6">
-          <h2 className="text-xl font-bold mb-1">Payment Method</h2>
-          <p className="text-gray-400 mb-4">Trusted Payment, 100% Money Back Guarantee</p>
+          <h2 className="text-xl font-bold mb-1">Pay</h2>
+          <p className="text-gray-400 mb-4">Secure Payment via Mobile Money or Bank Transfer</p>
 
-          {/* Payment Options */}
-          <div className="space-y-4">
-            {/* Wallet */}
-            <label className="flex items-center justify-between border rounded p-4 cursor-pointer">
-              <div className="flex items-center space-x-3">
-                <div className="bg-blue-100 p-2 rounded">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-                </div>
-                <span className="font-semibold text-gray-700">Wallet</span>
-              </div>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="wallet"
-                checked={selectedPayment === "wallet"}
-                onChange={() => setSelectedPayment("wallet")}
-                className="form-radio"
-              />
-            </label>
-
-            {/* Mpesa */}
-            <label className="flex items-center justify-between border rounded p-4 cursor-pointer">
-              <div className="flex items-center space-x-3">
-                <img src="/src/assets/mpesa.webp" alt="Mpesa" className="h-6" />
-                <span className="font-semibold text-gray-700">Via LEGACY CORE LTD</span>
-              </div>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="mpesa"
-                checked={selectedPayment === "mpesa"}
-                onChange={() => setSelectedPayment("mpesa")}
-                className="form-radio"
-              />
-            </label>
-
-            {/* Phone input for Mpesa */}
-            {selectedPayment === "mpesa" && (
-              <div className="flex items-center space-x-2 border rounded p-3">
-                <select
-                  value={countryCode}
-                  onChange={(e) => setCountryCode(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-1"
-                >
-                  <option value="+254">+254</option>
-                  <option value="+1">+1</option>
-                  <option value="+44">+44</option>
-                </select>
-                <input
-                  type="tel"
-                  placeholder="123456789"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="flex-1 border border-gray-300 rounded px-3 py-2"
-                />
-              </div>
-            )}
-
-            {/* Airtel, Equity, Vooma & More */}
-            <label className="flex items-center justify-between border rounded p-4 cursor-pointer">
-              <div className="flex items-center space-x-3">
-                <div className="bg-blue-100 p-2 rounded">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
-                </div>
-                <span className="font-semibold text-gray-700">Airtel, Equity, Vooma & More</span>
-              </div>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="airtel"
-                checked={selectedPayment === "airtel"}
-                onChange={() => setSelectedPayment("airtel")}
-                className="form-radio"
-              />
-            </label>
-          </div>
-
-          {/* Checkout Now Button */}
           <button
-            onClick={handleCheckoutNow}
-            className="mt-6 w-full bg-orange-500 text-white py-3 rounded hover:bg-orange-600 transition font-semibold"
+            onClick={handlePayNow}
+            disabled={loading}
+            className="w-60 bg-green-600 text-white py-3 rounded hover:bg-green-700"
           >
-            CHECKOUT NOW &rarr;
+            {loading ? "Processing..." : "Pay Now"}
           </button>
         </div>
 
-        {/* Right Column - Order Summary */}
         <div className="w-80 border border-gray-300 rounded p-4 h-fit">
           <h3 className="font-semibold mb-4">Order Summary</h3>
           <div className="flex justify-between mb-2">

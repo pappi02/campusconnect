@@ -18,14 +18,22 @@ from django.utils.html import strip_tags
 from .serializers import UserSerializer, RegisterSerializer, VerificationCodeSerializer, SendVerificationCodeRequestSerializer, SetPasswordSerializer, AddressSerializer, PaymentMethodSerializer, UserSerializer
 from .models import User, VerificationCode, Address, PaymentMethod
 
+from rest_framework_simplejwt.tokens import RefreshToken
+
 class RegisterView(APIView):
     permission_classes = [AllowAny] 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            user = serializer.save()
+            refresh = RefreshToken.for_user(user)
+            user_data = serializer.data
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'token': str(refresh.access_token),
+                'user': user_data
+            }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -102,6 +110,8 @@ class VerifyCodeView(APIView):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+from rest_framework_simplejwt.tokens import RefreshToken
+
 class SetPasswordView(APIView):
     permission_classes = [AllowAny]
 
@@ -143,7 +153,15 @@ class SetPasswordView(APIView):
             })
             if serializer.is_valid():
                 user = serializer.save()
-                return Response({'detail': 'User created and password set successfully.'}, status=status.HTTP_201_CREATED)
+                refresh = RefreshToken.for_user(user)
+                user_data = serializer.data
+                return Response({
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'token': str(refresh.access_token),
+                    'user': user_data,
+                    'detail': 'User created and password set successfully.'
+                }, status=status.HTTP_201_CREATED)
             else:
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

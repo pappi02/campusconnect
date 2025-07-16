@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../api";  // changed from "axios" to import axios instance
 import { toast } from "react-toastify";
 import CartItemsList from "../components/CartPage/CartItemsList";
 import CouponForm from "../components/CartPage/CouponForm";
 import OrderSummary from "../components/CartPage/OrderSummary";
+import { AuthContext } from "../contexts/AuthContext";
 
 axios.defaults.withCredentials = true;
 
@@ -13,41 +14,16 @@ const CartPage = () => {
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponAmount, setCouponAmount] = useState(0);
-  const shippingCost = 100;
+  const shippingCost = 31;
   const navigate = useNavigate();
-
-  // useEffect(() => {
-  //   const fetchCart = async () => {
-  //     try {
-  //       console.debug("Fetching cart from API...");
-  //       const response = await axios.get("http://localhost:8000/api/cart/");  // changed to relative path
-  //       console.debug("Cart API response:", response.data);
-  //       // response.data.cart is array of {product, quantity}
-  //       const cartData = response.data.cart || response.data.items || [];
-  //       const items = Array.isArray(cartData) ? cartData.map(({ product, quantity }) => ({
-  //         id: product.id,
-  //         name: product.name,
-  //         category: product.category.name, // category is an object, get name
-  //         price: product.price,
-  //         quantity,
-  //         image: product.image || "https://via.placeholder.com/60x60?text=Product",
-  //       })) : [];
-  //       console.debug("Parsed cart items:", items);
-  //       setCartItems(items);
-  //     } catch (error) {
-  //       console.error("Error fetching cart:", error);
-  //       setCartItems([]);
-  //     }
-  //   };
-  //   fetchCart();
-  // }, []);
+  const { user } = useContext(AuthContext);
 
 useEffect(() => {
   const fetchCart = async () => {
     try {
       console.debug("Fetching cart from API...");
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
 
       const response = await axios.get("/api/cart/", {
         headers: {
@@ -93,14 +69,26 @@ useEffect(() => {
   fetchCart();
 }, []);
 
-
-
   const handleRemoveItem = async (id) => {
     try {
+      const token = localStorage.getItem('authToken');
       // Remove item by sending DELETE request with product_id
-      await axios.delete("http://localhost:8000/api/cart/", { data: { product_id: id } });
+      await axios.delete("http://localhost:8000/api/cart/", { 
+        data: { product_id: id },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        withCredentials: true,
+      });
       // Refetch cart after removal
-      const response = await axios.get("api/cart/");
+      const response = await axios.get("api/cart/", {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        withCredentials: true,
+      });
       const cartData = response.data.cart?.items || [];
       const items = Array.isArray(cartData)
         ? cartData.map(({ product, quantity }) => ({
@@ -123,11 +111,34 @@ useEffect(() => {
     if (!item) return;
     const newQuantity = Math.max(1, item.quantity + delta);
     try {
+      const token = localStorage.getItem('authToken');
       // Update quantity by removing item and re-adding with new quantity
-      await axios.delete("http://localhost:8000/api/cart/", { data: { product_id: id } });
-      await axios.post("http://localhost:8000/api/cart/", { product_id: id, quantity: newQuantity });
+      await axios.delete("http://localhost:8000/api/cart/", { 
+        data: { product_id: id },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        withCredentials: true,
+      });
+      await axios.post("http://localhost:8000/api/cart/", 
+        { product_id: id, quantity: newQuantity },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
+          withCredentials: true,
+        }
+      );
       // Refetch cart after update
-      const response = await axios.get("api/cart/");
+      const response = await axios.get("api/cart/", {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        withCredentials: true,
+      });
       const cartData = response.data.cart?.items || [];
       const items = Array.isArray(cartData)
         ? cartData.map(({ product, quantity }) => ({
@@ -201,7 +212,11 @@ useEffect(() => {
   const { subTotal, discountAmount, total } = calculateTotal();
 
   const handleProceedToCheckout = () => {
-    navigate("/checkout", { state: { cartItems, couponCode, discountAmount } });
+    if (user) {
+      navigate("/checkout", { state: { cartItems, couponCode, discountAmount } });
+    } else {
+      navigate("/login", { state: { from: "/checkout" } });
+    }
   };
 
   const itemsCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);

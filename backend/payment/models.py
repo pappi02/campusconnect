@@ -11,8 +11,37 @@ class Payment(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    mpesa_code = models.CharField(max_length=50, unique=True, blank=True, null=True)
+
+    # M-Pesa or Paystack code or reference
+    mpesa_code = models.CharField(
+        max_length=100, unique=True, blank=True, null=True,
+        help_text="Transaction reference (e.g., Paystack or M-Pesa code)"
+    )
+
+    # Raw response from gateway (JSON string)
+    gateway_response = models.TextField(blank=True, null=True)
+
+    # Payment completion time
+    paid_at = models.DateTimeField(blank=True, null=True)
+
+    # Creation time
     timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "Payment"
+        verbose_name_plural = "Payments"
 
     def __str__(self):
         return f"Payment {self.id} for Order {self.order.id} ({self.status})"
+
+    def mark_completed(self, mpesa_code=None, response_data=None, paid_at=None):
+        """Convenience method to mark payment as completed"""
+        self.status = 'completed'
+        if mpesa_code:
+            self.mpesa_code = mpesa_code
+        if response_data:
+            self.gateway_response = response_data
+        if paid_at:
+            self.paid_at = paid_at
+        self.save()

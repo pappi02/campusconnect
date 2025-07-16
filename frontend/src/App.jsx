@@ -13,6 +13,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import NotFoundPage from "./pages/NotFoundPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import PasswordResetPage from "./pages/PasswordResetPage";
+import CheckoutPage from "./pages/CheckoutPage";
+import PaymentMethodPage from "./pages/PaymentMethodPage";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -33,6 +35,8 @@ const App = () => {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/password-reset" element={<PasswordResetPage />} />
           <Route element={<PrivateRoute />}>
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/payment-method" element={<PaymentMethodPage />} />
             {/* Add other private routes here */}
           </Route>
           {/* Add a catch-all route or 404 page if needed */}

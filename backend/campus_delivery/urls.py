@@ -22,6 +22,9 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import root_view
 from .views import get_csrf_token
 import watchman
+from django.urls import path
+
+
 
 urlpatterns = [
     path('', root_view, name='root'),
@@ -34,8 +37,14 @@ urlpatterns = [
     path('api/', include('notifications.urls')),
     path('api/', include('core_admin.urls')),
     path("csrf/", get_csrf_token),
+   
     # Removed conflicting login path to TokenObtainPairView to avoid routing conflict
     # path('api/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('watchman/', include('watchman.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+ 
+
+
+
+

@@ -1,12 +1,11 @@
 from rest_framework import serializers
+from .models import Order
 from .models import Payment
 
 class PaymentSerializer(serializers.ModelSerializer):
+    order_id = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all(), source='order', write_only=True)
+
     class Meta:
         model = Payment
-        fields = ['id', 'order', 'amount', 'status', 'mpesa_code', 'timestamp']
-        read_only = fields=['id', 'status', 'mpesa_code', 'timestamp']
-
-class PaymentInitiateSerializer(serializers.Serializer):
-    order_id = serializers.IntegerField()
-    phone_number = serializers.CharField(max_length=12)  # e.g., 2547XXXXXXXX
+        fields = ['id', 'order_id', 'amount', 'status', 'mpesa_code', 'timestamp']
+        read_only_fields = ['id', 'status', 'mpesa_code', 'timestamp']
