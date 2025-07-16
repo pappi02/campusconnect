@@ -1,0 +1,76 @@
+e.preventDefault();
+    try {
+      const response = await axios.post("/api/addresses/", newAddress, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        withCredentials: true,
+      });
+      setAddresses((prev) => [...prev, response.data]);
+      setShowAddressForm(false);
+      const addr = response.data;
+      const formattedAddress = `${addr.street_address}, ${addr.city}, ${addr.state}, ${addr.zip_code}, ${addr.country}`;
+      setDeliveryAddress(formattedAddress);
+      setNewAddress({
+        firstName: "",
+        lastName: "",
+        companyName: "",
+        country: "",
+        streetAddress: "",
+        city: "",
+        state: "",
+        zipCode: "",
+        phone: "",
+        email: "",
+      });
+    } catch (error) {
+      console.error("Error adding address:", error);
+    }
+  };
+=======
+
+  // Helper function to convert camelCase keys to snake_case
+  const toSnakeCase = (str) =>
+    str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+
+  const transformKeysToSnakeCase = (obj) => {
+    const newObj = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        newObj[toSnakeCase(key)] = obj[key];
+      }
+    }
+    return newObj;
+  };
+
+  const handleAddAddress = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = transformKeysToSnakeCase(newAddress);
+      const response = await axios.post("/api/addresses/", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        withCredentials: true,
+      });
+      setAddresses((prev) => [...prev, response.data]);
+      setShowAddressForm(false);
+      const addr = response.data;
+      const formattedAddress = `${addr.street_address}, ${addr.city}, ${addr.state}, ${addr.zip_code}, ${addr.country}`;
+      setDeliveryAddress(formattedAddress);
+      setNewAddress({
+        firstName: "",
+        lastName: "",
+        companyName: "",
+        country: "",
+        streetAddress: "",
+        city: "",
+        state: "",
+        zipCode: "",
+        phone: "",
+        email: "",
+      });
+    } catch (error) {
+      console.error("Error adding address:", error);
+    }
+  };

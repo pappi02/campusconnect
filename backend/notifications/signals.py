@@ -17,6 +17,16 @@ from .models import Notification
 # Helper function to send in-app notification
 def send_in_app_notification(recipient, notification_type, message):
     channel_layer = get_channel_layer()
+    if channel_layer is None:
+        # Channel layer not configured, skip sending in-app notification
+        Notification.objects.create(
+            recipient=recipient,
+            type=notification_type,
+            channel='in_app',
+            message=message,
+            status='failed'
+        )
+        return
     async_to_sync(channel_layer.group_send)(
         f"user_{recipient.id}",
         {

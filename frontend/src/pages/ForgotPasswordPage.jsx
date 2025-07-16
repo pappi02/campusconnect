@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "../api";
 import { toast } from "react-toastify";
+import { showToast } from "../utils/toastUtils";
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState("");

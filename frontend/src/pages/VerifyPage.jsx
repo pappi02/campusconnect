@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import axios from "../api";
 import { showToast } from "../utils/toastUtils";
 import CustomFooter from "../components/CustomFooter";
+import { AuthContext } from "../contexts/AuthContext";
 
 const VerifyPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { login } = useContext(AuthContext);
+
   const [otp, setOtp] = useState("");
   const [email, setEmail] = useState(""); // Ideally, get this from context or props
   const [userData, setUserData] = useState(null);
@@ -56,7 +59,13 @@ const VerifyPage = () => {
       const payload = { email, code: otp, password, userData };
       const response = await axios.post("/api/set-password/", payload);
       console.log("Set password response:", response);
-      navigate("/home");
+      if (response.status === 201 || response.status === 200) {
+        const { user, token } = response.data;
+        if (user && token) {
+          login(user, token);
+        }
+        navigate("/home");
+      }
     } catch (error) {
       console.error("Set password error:", error.response ? error.response.data : error.message);
       setError("Failed to set password. Please try again.");

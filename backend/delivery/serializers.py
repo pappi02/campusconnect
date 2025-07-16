@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Delivery
+from .models import Delivery, DeliverySchedule
 from orders.serializers import OrderSerializer
 from users.models import User
 
@@ -11,6 +11,12 @@ class DeliverySerializer(serializers.ModelSerializer):
         model = Delivery
         fields = ['id', 'order', 'delivery_person', 'status', 'location', 'assigned_at', 'updated_at']
         read_only_fields = ['id', 'assigned_at', 'updated_at']
+
+class DeliveryScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliverySchedule
+        fields = ['id', 'delivery', 'schedule_type', 'scheduled_date', 'scheduled_time', 'additional_info', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 class DeliveryAssignSerializer(serializers.Serializer):
     order_id = serializers.IntegerField()

@@ -3,119 +3,103 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .models import Payment
-from .serializers import PaymentSerializer, PaymentInitiateSerializer
+from .serializers import PaymentSerializer
 from orders.models import Order
+from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
 import requests
-import base64
-import datetime
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+import json
 
-class PaymentInitiateView(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        serializer = PaymentInitiateSerializer(data=request.data)
-        if serializer.is_valid():
-            order_id = serializer.validated_data['order_id']
-            phone_number = serializer.validated_data['phone_number']
-            try:
-                order = Order.objects.get(id=order_id, customer=request.user)
-                if order.payments.filter(status='completed').exists():
-                    return Response({"detail": "Order already paid"}, status=status.HTTP_400_BAD_REQUEST)
-                
-                # M-Pesa STK Push
-                access_token = self.get_mpesa_access_token()
-                if not access_token:
-                    return Response({"detail": "Failed to obtain M-Pesa token"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                
-                payment = Payment.objects.create(
-                    order=order,
-                    amount=order.total_price,
-                    status='pending'
-                )
-                
-                response = self.initiate_stk_push(access_token, phone_number, order.total_price, payment.id)
-                if response.get('ResponseCode') == '0':
-                    return Response({"message": "Payment initiated, awaiting user confirmation"}, status=status.HTTP_200_OK)
-                else:
-                    payment.status = 'failed'
-                    payment.save()
-                    return Response({"detail": response.get('ResponseDescription', 'Payment initiation failed')}, status=status.HTTP_400_BAD_REQUEST)
-            except Order.DoesNotExist:
-                return Response({"detail": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def get_mpesa_access_token(self):
-        consumer_key = settings.MPESA_CONSUMER_KEY
-        consumer_secret = settings.MPESA_CONSUMER_SECRET
-        api_url = 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
+   
+
+
+
+PAYSTACK_SECRET_KEY = 'sk_live_f9dde8762fbe64731bd30a9b02ddb1c906c29daa'  # Replace with your actual Paystack secret
+
+
+@csrf_exempt
+@require_POST
+def verify_payment(request):
+    try:
+        data = json.loads(request.body)
+        reference = data.get('reference')
+        if not reference:
+            return JsonResponse({'error': 'Missing reference'}, status=400)
+
         headers = {
-            'Authorization': 'Basic ' + base64.b64encode(f"{consumer_key}:{consumer_secret}".encode()).decode()
+            'Authorization': f'Bearer {PAYSTACK_SECRET_KEY}',
+            'Content-Type': 'application/json',
         }
-        try:
-            response = requests.get(api_url, headers=headers)
-            return response.json().get('access_token')
-        except:
-            return None
 
-    def initiate_stk_push(self, access_token, phone_number, amount, payment_id):
-        api_url = 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
-        headers = {'Authorization': f'Bearer {access_token}'}
-        timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-        business_short_code = settings.MPESA_SHORT_CODE
-        passkey = settings.MPESA_PASSKEY
-        password = base64.b64encode(f"{business_short_code}{passkey}{timestamp}".encode()).decode()
-        payload = {
-            'BusinessShortCode': business_short_code,
-            'Password': password,
-            'Timestamp': timestamp,
-            'TransactionType': 'CustomerPayBillOnline',
-            'Amount': int(amount),
-            'PartyA': phone_number,
-            'PartyB': business_short_code,
-            'PhoneNumber': phone_number,
-            'CallBackURL': settings.MPESA_CALLBACK_URL + f'/api/payment/callback/{payment_id}/',
-            'AccountReference': f'Order_{payment_id}',
-            'TransactionDesc': 'Payment for order'
-        }
-        response = requests.post(api_url, json=payload, headers=headers)
-        return response.json()
+        response = requests.get(f'https://api.paystack.co/transaction/verify/{reference}', headers=headers)
+        result = response.json()
 
-class PaymentCallbackView(APIView):
-    def post(self, request, payment_id):
-        try:
-            payment = Payment.objects.get(id=payment_id)
-            data = request.data.get('Body', {}).get('stkCallback', {})
-            result_code = data.get('ResultCode')
-            if result_code == 0:
-                payment.status = 'completed'
-                payment.mpesa_code = data.get('CallbackMetadata', {}).get('Item', [{}])[1].get('Value')
-                payment.save()
-                payment.order.status = 'in_progress'  # Update order status
-                payment.order.save()
-                self.send_receipt(payment)
-                return Response({"message": "Payment processed successfully"}, status=status.HTTP_200_OK)
-            else:
-                payment.status = 'failed'
-                payment.save()
-                return Response({"message": "Payment failed"}, status=status.HTTP_400_BAD_REQUEST)
-        except Payment.DoesNotExist:
-            return Response({"detail": "Payment not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not result.get('status'):
+            return JsonResponse({'error': 'Invalid Paystack response'}, status=400)
 
-    def send_receipt(self, payment):
-        subject = f'Payment Receipt for Order {payment.order.id}'
-        message = (
-            f"Dear {payment.order.customer.full_name},\n\n"
-            f"Thank you for your payment of KES {payment.amount} for Order {payment.order.id}.\n"
-            f"M-Pesa Transaction Code: {payment.mpesa_code}\n"
-            f"Date: {payment.timestamp}\n\n"
-            f"Best regards,\nCampus Delivery Team"
-        )
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            [payment.order.customer.email],
-            fail_silently=True
-        )
+        pay_data = result.get('data', {})
+
+        if pay_data.get('status') == 'success':
+            metadata = pay_data.get('metadata', {})
+            custom_fields = metadata.get('custom_fields', [])
+            order_id = None
+            for field in custom_fields:
+                if field.get('variable_name') == 'order_id':
+                    order_id = field.get('value')
+                    break
+
+            if not order_id:
+                return JsonResponse({'error': 'Missing order_id in metadata'}, status=400)
+
+            try:
+                order = Order.objects.get(id=order_id)
+            except Order.DoesNotExist:
+                return JsonResponse({'error': 'Order not found'}, status=404)
+
+            # Save or update Payment
+            payment, created = Payment.objects.get_or_create(
+                mpesa_code=pay_data['reference'],  # we use this as unique reference
+                defaults={
+                    'order': order,
+                    'amount': float(pay_data['amount']) / 100,
+                    'status': 'completed',
+                    'gateway_response': json.dumps(pay_data),
+                    'paid_at': parse_datetime(pay_data.get('paid_at')),
+                }
+            )
+
+            # Optionally update order status
+            order.status = 'paid'
+            order.save()
+
+            return JsonResponse({'message': 'Payment verified and saved successfully'})
+
+        return JsonResponse({'error': 'Payment not successful'}, status=400)
+
+    except Exception as e:
+        return JsonResponse({'error': 'Server error', 'details': str(e)}, status=500)
+
+
+
+
+@csrf_exempt
+def paystack_webhook(request):
+    paystack_secret_key = os.getenv("PAYSTACK_SECRET_KEY")
+    paystack_signature = request.headers.get('x-paystack-signature')
+
+    computed_signature = hmac.new(
+        bytes(paystack_secret_key, 'utf-8'),
+        msg=request.body,
+        digestmod=hashlib.sha512
+    ).hexdigest()
+
+    if computed_signature != paystack_signature:
+        return JsonResponse({'status': 'unauthorized'}, status=401)
+
+   

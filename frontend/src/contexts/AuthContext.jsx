@@ -8,6 +8,18 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(getToken());
 
+  // Restore user from token on load
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      const decoded = decodeToken(token);
+      if (decoded && decoded.user_id) {
+        // Optionally fetch user details from backend here
+        setUser({ id: decoded.user_id, username: decoded.username || "" });
+      }
+    }
+  }, []);
+
   // Function to refresh token using backend API
   const refreshToken = useCallback(async () => {
     try {

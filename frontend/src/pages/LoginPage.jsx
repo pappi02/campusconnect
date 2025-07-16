@@ -30,7 +30,8 @@ const LoginPage = () => {
         const { token, user } = response.data;
         console.log("Logging in user with token:", token);
         login(user, token);
-        navigate("/home");
+        const redirectPath = window.history.state?.usr?.from || "/home";
+        navigate(redirectPath);
       }
     } catch (err) {
       if (err.response) {
