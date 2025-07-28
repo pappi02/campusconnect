@@ -5,7 +5,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import 'uno.css' // 👈 This is crucial!
 import { BrowserRouter } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthProvider";
+import  AuthProvider  from "./contexts/AuthProvider";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

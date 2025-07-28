@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { useContext } from "react";
 import {
   ShoppingCart,
   Search,
@@ -8,7 +8,7 @@ import {
   User,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { AuthContext } from "../contexts/AuthContext";
+import  AuthContext from "../contexts/AuthContext";
 
 
 
@@ -25,7 +25,7 @@ const Navbar = () => {
     <header className="text-sm">
       {/* Top Bar */}
       <div className="flex justify-end space-x-6 bg-[#e6e9f8] text-gray-600 text-xs px-4 py-2">
-        <a href="#" className="hover:underline">Sell With Us</a>
+        <a href="/vendorlogin" className="hover:underline">Sell With Us</a>
         <a href="#" className="hover:underline">Contact Us</a>
         <a href="#" className="hover:underline">Download App</a>
       </div>
@@ -75,7 +75,9 @@ const Navbar = () => {
 
         {/* Right: Icons and Login */}
         <div className="flex items-center gap-4">
-          <MapPin className="text-black cursor-pointer" />
+          <Link to="/customer-map">
+            <MapPin className="text-black cursor-pointer hover:text-blue-600 transition-colors" />
+          </Link>
           <Bell className="text-black cursor-pointer" />
           <Heart className="text-black cursor-pointer" />
           <div onClick={handleCartClick} className="cursor-pointer">

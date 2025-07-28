@@ -1,49 +1,151 @@
-from rest_framework import generics, permissions
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import status, permissions, generics
 from django.contrib.auth import authenticate
+from django.contrib.auth import get_user_model
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.core.mail import send_mail, EmailMultiAlternatives
-from django.conf import settings
-import random
-import string
-from datetime import datetime, timedelta
-from django.utils import timezone
-from django.template.loader import render_to_string
-from django.utils.html import strip_tags
+from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
+from .serializers import UserSerializer, AddressSerializer, PaymentMethodSerializer, VerificationCodeSerializer, VendorSettingsSerializer
+from .models import Address, PaymentMethod
 
-from .serializers import UserSerializer, RegisterSerializer, VerificationCodeSerializer, SendVerificationCodeRequestSerializer, SetPasswordSerializer, AddressSerializer, PaymentMethodSerializer, UserSerializer
-from .models import User, VerificationCode, Address, PaymentMethod
 
-from rest_framework_simplejwt.tokens import RefreshToken
+User = get_user_model()
+
+# Combined authentication (JWT + Session)
+class CombinedAuthentication(SessionAuthentication, JWTAuthentication):
+    pass
+
+
 
 class RegisterView(APIView):
-    permission_classes = [AllowAny] 
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            refresh = RefreshToken.for_user(user)
-            user_data = serializer.data
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'token': str(refresh.access_token),
-                'user': user_data
-            }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = UserSerializer(data=request.data)
 
-from rest_framework.permissions import IsAuthenticated, AllowAny
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        user = serializer.save()
+
+        # Set role based on request path
+        path = request.path.lower()
+        user.role = "vendor" if "vendor" in path else "customer"
+
+        # Use email as username
+        user.username = user.email
+        user.save()
+
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": UserSerializer(user).data
+        }, status=status.HTTP_201_CREATED)
+
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return Response({'detail': 'Email and password required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = authenticate(request, username=user.email, password=password)
+
+        if not user:
+            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": UserSerializer(user).data
+        }, status=status.HTTP_200_OK)
+
+# Logout View
+#class LogoutView(APIView):
+#   authentication_classes = [CombinedAuthentication]
+#   permission_classes = [IsAuthenticated]
+
+#   def post(self, request):
+#       try:
+#           refresh_token = request.data["refresh"]
+#           token = RefreshToken(refresh_token)
+#           token.blacklist()  # Only if blacklist app is enabled
+#           return Response({"detail": "Logout successful."}, status=status.HTTP_205_RESET_CONTENT)
+#       except Exception:
+#           return Response({"detail": "Logout failed or invalid token."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+# Password Reset via Verification Code (mock implementation)
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.conf import settings
+from django.template.loader import render_to_string
+import random
+import string
+from .models import VerificationCode
+
+class SendVerificationCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response({"detail": "Email required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate a 6-digit numeric verification code
+        code = ''.join(random.choices(string.digits, k=6))
+
+        # Save or update the verification code in the database
+        verification, created = VerificationCode.objects.update_or_create(
+            email=email,
+            defaults={'code': code}
+        )
+
+        # Render the HTML email template with the code
+        html_content = render_to_string('emails/verification_code.html', {'code': code})
+
+        subject = "Your Verification Code"
+        from_email = settings.DEFAULT_FROM_EMAIL
+        recipient_list = [email]
+
+        try:
+            msg = EmailMultiAlternatives(subject, '', from_email, recipient_list)
+            msg.attach_alternative(html_content, "text/html")
+            msg.send()
+        except Exception as e:
+            return Response({"detail": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"detail": "Verification code sent."}, status=status.HTTP_200_OK)
+
+        
+        
+        
+
+# --------- Profile ---------
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data)
+        return Response(UserSerializer(request.user).data)
 
     def put(self, request):
         serializer = UserSerializer(request.user, data=request.data, partial=True)
@@ -52,42 +154,7 @@ class ProfileView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class SendVerificationCodeView(APIView):
-    permission_classes = [AllowAny]
 
-    def post(self, request):
-        serializer = SendVerificationCodeRequestSerializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            # Generate 6-digit alphanumeric code
-            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            expires_at = timezone.now() + timedelta(minutes=10)
-
-            # Save or update verification code in DB
-            VerificationCode.objects.update_or_create(
-                email=email,
-                defaults={'code': code, 'expires_at': expires_at}
-            )
-
-            # Send email
-            subject = 'Your Verification Code'
-            from_email = settings.DEFAULT_FROM_EMAIL or 'no-reply@campusdelivery.com'
-            recipient_list = [email]
-
-            # Render HTML email template
-            html_content = render_to_string('emails/verification_code.html', {'code': code})
-            text_content = strip_tags(html_content)
-
-            try:
-                email_message = EmailMultiAlternatives(subject, text_content, from_email, recipient_list)
-                email_message.attach_alternative(html_content, "text/html")
-                email_message.send()
-            except Exception as e:
-                return Response({'detail': f'Failed to send email: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            return Response({'detail': 'Verification code sent.'}, status=status.HTTP_200_OK)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifyCodeView(APIView):
     permission_classes = [AllowAny]
@@ -96,21 +163,26 @@ class VerifyCodeView(APIView):
         serializer = VerificationCodeSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            code = serializer.validated_data.get('code', '')
+            code = serializer.validated_data['code']
+
             try:
                 verification = VerificationCode.objects.get(email=email)
                 if verification.is_expired():
                     return Response({'detail': 'Verification code expired.'}, status=status.HTTP_400_BAD_REQUEST)
                 if verification.code == code:
-                    return Response({'detail': 'Verification successful.'}, status=status.HTTP_200_OK)
-                else:
-                    return Response({'detail': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+                    # Get user role if user exists
+                    try:
+                        user = User.objects.get(email=email)
+                        role = user.role
+                    except User.DoesNotExist:
+                        role = None
+                    return Response({'detail': 'Verification successful.', 'role': role})
+                return Response({'detail': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
             except VerificationCode.DoesNotExist:
                 return Response({'detail': 'Verification code not found.'}, status=status.HTTP_404_NOT_FOUND)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-from rest_framework_simplejwt.tokens import RefreshToken
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class SetPasswordView(APIView):
     permission_classes = [AllowAny]
@@ -121,7 +193,6 @@ class SetPasswordView(APIView):
         password = request.data.get('password')
         user_data = request.data.get('userData', {})
 
-        # Verify the code
         try:
             verification = VerificationCode.objects.get(email=email)
             if verification.is_expired():
@@ -131,103 +202,38 @@ class SetPasswordView(APIView):
         except VerificationCode.DoesNotExist:
             return Response({'detail': 'Verification code not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Set password for the user or create user if not exists
         try:
             user = User.objects.get(email=email)
             user.set_password(password)
             user.save()
-            return Response({'detail': 'Password set successfully.'}, status=status.HTTP_200_OK)
+            return Response({'detail': 'Password set successfully.'})
         except User.DoesNotExist:
-            # Create new user with user_data
-            serializer = RegisterSerializer(data={
-                'full_name': user_data.get('firstName', '') + ' ' + user_data.get('lastName', ''),
-                'gender': user_data.get('gender', ''),
+            serializer = UserSerializer(data={
+                'first_name': user_data.get('firstName', ''),
+                'last_name': user_data.get('lastName', ''),
                 'phone': user_data.get('phoneCountryCode', '') + user_data.get('phoneNumber', ''),
                 'email': email,
-                'date_of_birth': user_data.get('dob', ''),
-                'country': user_data.get('country', ''),
-                'city': user_data.get('city', ''),
-                'zip_code': user_data.get('zipCode', ''),
                 'role': 'customer',
                 'password': password,
             })
             if serializer.is_valid():
                 user = serializer.save()
                 refresh = RefreshToken.for_user(user)
-                user_data = serializer.data
                 return Response({
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
                     'token': str(refresh.access_token),
-                    'user': user_data,
+                    'user': UserSerializer(user).data,
                     'detail': 'User created and password set successfully.'
                 }, status=status.HTTP_201_CREATED)
-            else:
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class LoginView(APIView):
-    permission_classes = [AllowAny]
 
-    def post(self, request):
-        email = request.data.get('email')
-        password = request.data.get('password')
-        # Use email field for authentication since User model uses email as unique identifier
-        print("Aunthenticating user")
-        user = authenticate(request, email=email, password=password)
-        print("user authenticated is:", user)
-        if user is not None:
-            refresh = RefreshToken.for_user(user)
-            user_data = UserSerializer(user).data
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'token': str(refresh.access_token),
-                'user': user_data
-            }, status=status.HTTP_200_OK)
-        else:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-
-class AddressListCreateView(generics.ListCreateAPIView):
-    serializer_class = AddressSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Address.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-class AddressDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = AddressSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Address.objects.filter(user=self.request.user)
-
-class PaymentMethodListCreateView(generics.ListCreateAPIView):
-    serializer_class = PaymentMethodSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return PaymentMethod.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-class PaymentMethodDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = PaymentMethodSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return PaymentMethod.objects.filter(user=self.request.user)
-
-from rest_framework.permissions import IsAuthenticated
-from rest_framework import serializers
-from django.contrib.auth.password_validation import validate_password
-
+# --------- Password Change ---------
 class UpdatePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True, validators=[validate_password])
+
 
 class UpdatePasswordView(APIView):
     permission_classes = [IsAuthenticated]
@@ -236,13 +242,86 @@ class UpdatePasswordView(APIView):
         user = request.user
         serializer = UpdatePasswordSerializer(data=request.data)
         if serializer.is_valid():
-            current_password = serializer.validated_data['current_password']
-            new_password = serializer.validated_data['new_password']
-            if not user.check_password(current_password):
+            if not user.check_password(serializer.validated_data['current_password']):
                 return Response({'current_password': ['Current password is incorrect.']}, status=status.HTTP_400_BAD_REQUEST)
-            user.set_password(new_password)
+            user.set_password(serializer.validated_data['new_password'])
             user.save()
-            # Return empty response with 204 No Content status to avoid JSON parsing error on client
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+# --------- Address ---------
+class AddressListCreateView(generics.ListCreateAPIView):
+    serializer_class = AddressSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Address.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class AddressDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = AddressSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Address.objects.filter(user=self.request.user)
+
+
+# --------- Payment Methods ---------
+class PaymentMethodListCreateView(generics.ListCreateAPIView):
+    serializer_class = PaymentMethodSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return PaymentMethod.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class PaymentMethodDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = PaymentMethodSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return PaymentMethod.objects.filter(user=self.request.user)
+
+
+
+
+
+class VendorSettingsView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        
+        # Check if user is a vendor
+        if user.role != 'vendor':
+            return Response(
+                {"detail": "Only vendors can access settings."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = VendorSettingsSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def put(self, request):
+        user = request.user
+        
+        # Check if user is a vendor
+        if user.role != 'vendor':
+            return Response(
+                {"detail": "Only vendors can access settings."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = VendorSettingsSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

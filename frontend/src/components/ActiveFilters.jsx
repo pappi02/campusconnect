@@ -13,7 +13,7 @@ const ActiveFilters = ({
           key={idx}
           className="bg-yellow-400 text-white rounded-full px-3 py-1 text-sm flex items-center gap-1"
         >
-          {filter}
+          {typeof filter === 'object' ? filter.display || filter.name || filter.id : filter}
           <button
             onClick={() => removeFilter(filter)}
             className="ml-1 focus:outline-none"

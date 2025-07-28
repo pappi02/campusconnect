@@ -5,7 +5,7 @@ import { toast } from "react-toastify";
 import CartItemsList from "../components/CartPage/CartItemsList";
 import CouponForm from "../components/CartPage/CouponForm";
 import OrderSummary from "../components/CartPage/OrderSummary";
-import { AuthContext } from "../contexts/AuthContext";
+import  AuthContext  from "../contexts/AuthContext";
 
 axios.defaults.withCredentials = true;
 
@@ -73,22 +73,11 @@ useEffect(() => {
     try {
       const token = localStorage.getItem('authToken');
       // Remove item by sending DELETE request with product_id
-      await axios.delete("http://localhost:8000/api/cart/", { 
-        data: { product_id: id },
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        withCredentials: true,
+      await axios.delete("/api/cart/", { 
+        data: { product_id: id }
       });
       // Refetch cart after removal
-      const response = await axios.get("api/cart/", {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        withCredentials: true,
-      });
+      const response = await axios.get("/api/cart/");
       const cartData = response.data.cart?.items || [];
       const items = Array.isArray(cartData)
         ? cartData.map(({ product, quantity }) => ({
@@ -113,32 +102,14 @@ useEffect(() => {
     try {
       const token = localStorage.getItem('authToken');
       // Update quantity by removing item and re-adding with new quantity
-      await axios.delete("http://localhost:8000/api/cart/", { 
-        data: { product_id: id },
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        withCredentials: true,
+      await axios.delete("/api/cart/", { 
+        data: { product_id: id }
       });
-      await axios.post("http://localhost:8000/api/cart/", 
-        { product_id: id, quantity: newQuantity },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          withCredentials: true,
-        }
+      await axios.post("/api/cart/", 
+        { product_id: id, quantity: newQuantity }
       );
       // Refetch cart after update
-      const response = await axios.get("api/cart/", {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        withCredentials: true,
-      });
+      const response = await axios.get("/api/cart/");
       const cartData = response.data.cart?.items || [];
       const items = Array.isArray(cartData)
         ? cartData.map(({ product, quantity }) => ({
@@ -189,7 +160,7 @@ useEffect(() => {
     try {
       // Clear all items by deleting each one
       for (const item of cartItems) {
-        await axios.delete("http://localhost:8000/api/cart/", { data: { product_id: item.id } });
+        await axios.delete("/api/cart/", { data: { product_id: item.id } });
       }
       setCartItems([]);
     } catch (error) {
@@ -205,7 +176,7 @@ useEffect(() => {
     } else if (couponDiscount) {
       discountAmount = (couponDiscount / 100) * subTotal;
     }
-    const total = subTotal + shippingCost - discountAmount;
+    const total = subTotal - discountAmount;
     return { subTotal, discountAmount, total };
   };
 
@@ -263,7 +234,7 @@ useEffect(() => {
         <OrderSummary
           itemsCount={itemsCount}
           subTotal={subTotal}
-          shippingCost={shippingCost}
+          shippingCost={0}
           couponDiscount={couponDiscount}
           total={total}
           onProceedToCheckout={handleProceedToCheckout}

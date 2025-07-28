@@ -8,24 +8,6 @@ from delivery.models import Delivery
 from notifications.models import Notification
 from core_admin.models import Complaint
 
-@admin.register(User)
-class UserAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'email', 'role', 'is_approved', 'is_active', 'phone')
-    list_filter = ('role', 'is_approved', 'is_active')
-    search_fields = ('full_name', 'email', 'phone')
-    actions = ['approve_vendors']
-    readonly_fields = ('id', 'date_joined')
-
-    def approve_vendors(self, request, queryset):
-        queryset.filter(role='vendor').update(is_approved=True)
-    approve_vendors.short_description = "Approve selected vendors"
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        if request.user.role == 'vendor':
-            return qs.filter(id=request.user.id)
-        return qs
-
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'vendor', 'type', 'category', 'price', 'quantity', 'created_at')
@@ -173,7 +155,6 @@ class CampusAdminSite(admin.AdminSite):
         return super().index(request, extra_context)
 
 admin_site = CampusAdminSite(name='campus_admin')
-admin_site.register(User, UserAdmin)
 admin_site.register(Product, ProductAdmin)
 admin_site.register(Order, OrderAdmin)
 admin_site.register(OrderItem, OrderItemAdmin)

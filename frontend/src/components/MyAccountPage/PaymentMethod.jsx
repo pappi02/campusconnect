@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { AuthContext } from "../../contexts/AuthContext";
+import  AuthContext  from "../../contexts/AuthContext";
 import mpesaLogo from "../../assets/mpesa.webp";
 import googleLogo from "../../assets/googleplay.svg";
 

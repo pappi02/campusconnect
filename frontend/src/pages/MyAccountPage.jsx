@@ -8,7 +8,7 @@ import PaymentMethod from "../components/MyAccountPage/PaymentMethod";
 import PasswordManager from "../components/MyAccountPage/PasswordManager";
 import Logout from "../components/MyAccountPage/Logout";
 import api from "../api";
-import { AuthContext } from "../contexts/AuthContext";
+import  AuthContext  from "../contexts/AuthContext";
 
 const MyAccountPage = () => {
   const { token } = useContext(AuthContext);
@@ -71,7 +71,25 @@ const MyAccountPage = () => {
         // Fetch user-specific orders from backend
         const response = await api.get("/api/orders/");
         console.log("Orders API response data:", response.data);
-        setOrders(response.data);
+        // Adjust for paginated response
+        const ordersData = Array.isArray(response.data) ? response.data : response.data.results || [];
+        // Transform items to products for each order
+        const transformedOrders = ordersData.map(order => {
+          const products = order.items?.map(item => ({
+            productId: item.product?.id || null,
+            imgSrc: item.product?.image_url || item.product?.image || "https://via.placeholder.com/60x60?text=Product",
+            alt: item.product?.name || "Product Image",
+            name: item.product?.name || "Unnamed Product",
+            description: item.product?.description || "",
+          })) || [];
+          // Filter out products with null productId to avoid undefined product fetch
+          const filteredProducts = products.filter(p => p.productId !== null);
+          return {
+            ...order,
+            products: filteredProducts,
+          };
+        });
+        setOrders(transformedOrders);
       } catch (error) {
         console.error("Failed to fetch user orders:", error);
       }
@@ -201,7 +219,7 @@ const MyAccountPage = () => {
             />
           )}
 
-          {activeMenu === "My Orders" && <OrdersList />}
+          {activeMenu === "My Orders" && <OrdersList orders={orders} />}
 
           {activeMenu === "Manage Address" && (
             <AddressManager

@@ -8,7 +8,7 @@ import Pagination from "../components/Pagination";
 import ErrorBoundary from "../components/ErrorBoundary";
 import Footer from '../components/Footer';
 import Navbar from '../components/Navbar';
-import { AuthContext } from "../contexts/AuthContext";
+import  AuthContext  from "../contexts/AuthContext";
 
 const Home = () => {
   const { user } = useContext(AuthContext);
@@ -21,7 +21,7 @@ const Home = () => {
   const [error, setError] = useState(null);
 
   const [selectedCategories, setSelectedCategories] = useState({});
-  const [priceRange, setPriceRange] = useState([0, 100000]);
+  const [priceRange, setPriceRange] = useState([0, 50000]);
   const [selectedReviews, setSelectedReviews] = useState([]);
   const [sortBy, setSortBy] = useState("Default Sorting");
   const [activeFilters, setActiveFilters] = useState([]);
@@ -60,10 +60,10 @@ const Home = () => {
     const selectedCatsArrays = Object.values(selectedCategories);
     const categorySelected =
       selectedCatsArrays.length === 0 ||
-      selectedCatsArrays.some((cats) => cats.includes(product.category));
+      selectedCatsArrays.some((cats) => cats.includes(product.category?.id || product.category));
     if (!categorySelected) return false;
     if (product.price < priceRange[0] || product.price > priceRange[1]) return false;
-    if (selectedReviews.length > 0 && !selectedReviews.includes(Math.floor(product.rating))) return false;
+    if (selectedReviews.length > 0 && !selectedReviews.includes(Math.floor(product.rating || product.average_rating || 0))) return false;
     return true;
   });
 
@@ -114,21 +114,26 @@ const Home = () => {
 
   const clearAllFilters = () => {
     setSelectedCategories({});
-    setPriceRange([0, 100000]);
+    setPriceRange([0, 50000]);
     setSelectedReviews([]);
   };
 
   const removeFilter = (filter) => {
-    if (filter.startsWith("Price:")) {
-      setPriceRange([0, 100000]);
-    } else if (filter.endsWith("Star")) {
-      const star = Number(filter[0]);
+    // Handle both old string format and new object format
+    const filterObj = typeof filter === 'object' ? filter : { display: String(filter), type: 'unknown', id: filter };
+    
+    if (filterObj.type === 'price' || filterObj.display.startsWith("Price:")) {
+      setPriceRange([0, 50000]);
+    } else if (filterObj.type === 'rating' || filterObj.display.endsWith("Star")) {
+      const star = filterObj.type === 'rating' ? filterObj.id : Number(filterObj.display[0]);
       setSelectedReviews((prev) => prev.filter((s) => s !== star));
     } else {
+      // Handle category filters
+      const filterId = filterObj.id;
       setSelectedCategories((prev) => {
         const newCats = { ...prev };
         Object.keys(newCats).forEach((group) => {
-          newCats[group] = newCats[group].filter((cat) => cat !== filter);
+          newCats[group] = newCats[group].filter((cat) => cat !== filterId);
         });
         return newCats;
       });
@@ -137,15 +142,47 @@ const Home = () => {
 
   useEffect(() => {
     const filters = [];
+    
+    // Add category filters with names instead of IDs
     Object.entries(selectedCategories).forEach(([, cats]) => {
-      cats.forEach((cat) => filters.push(cat));
+      cats.forEach((catId) => {
+        // Find category name from categoriesData
+        const category = categoriesData.find(cat => cat.id === catId);
+        if (category) {
+          filters.push({
+            id: catId,
+            display: category.name,
+            type: 'category'
+          });
+        } else {
+          // Fallback for legacy string categories
+          filters.push({
+            id: catId,
+            display: catId,
+            type: 'category'
+          });
+        }
+      });
     });
-    if (priceRange[0] !== 0 || priceRange[1] !== 10000) {
-      filters.push(`Price: Ksh ${priceRange[0]} - Ksh ${priceRange[1]}`);
+    
+    if (priceRange[0] !== 0 || priceRange[1] !== 50000) {
+      filters.push({
+        id: 'price',
+        display: `Price: Ksh ${priceRange[0].toLocaleString()} - Ksh ${priceRange[1].toLocaleString()}`,
+        type: 'price'
+      });
     }
-    selectedReviews.forEach((star) => filters.push(`${star} Star`));
+    
+    selectedReviews.forEach((star) => {
+      filters.push({
+        id: star,
+        display: `${star} Star`,
+        type: 'rating'
+      });
+    });
+    
     setActiveFilters(filters);
-  }, [selectedCategories, priceRange, selectedReviews]);
+  }, [selectedCategories, priceRange, selectedReviews, categoriesData]);
 
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -170,13 +207,10 @@ const Home = () => {
 
   return (
     <ErrorBoundary fallback={<p>Something went wrong.</p>}>
-      <Navbar/>
-+     <Navbar user={user} />
+      <Navbar user={user} />
       <div className="bg-gray-100 min-h-screen p-6">
         <div className="flex gap-6 mt-30">
--          
            <FilterSidebar
-             categoriesData={categoriesData}
              selectedCategories={selectedCategories}
              handleCategoryChange={handleCategoryChange}
              priceRange={priceRange}
@@ -215,7 +249,7 @@ const Home = () => {
            </main>
          </div>
        </div>
-+      <Footer />
+      <Footer />
      </ErrorBoundary>
    );
  };

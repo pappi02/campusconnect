@@ -43,34 +43,72 @@ class UserSerializer(serializers.ModelSerializer):
     addresses = AddressSerializer(many=True, read_only=True)
     payment_methods = PaymentMethodSerializer(many=True, read_only=True)
 
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
+
     class Meta:
         model = User
-        fields = ['id', 'full_name', 'email', 'phone', 'id_number', 'role', 'is_approved', 'location', 'addresses', 'payment_methods']
+        fields = ['id', 'first_name', 'last_name', 'email', 'phone', 'id_number', 'role', 'is_approved', 'location', 'addresses', 'payment_methods']
         read_only_fields = ['id', 'is_approved']
 
+
+
 class RegisterSerializer(serializers.ModelSerializer):
-    # Removed password field as per request
+    email = serializers.EmailField(required=True)
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
+    phone = serializers.CharField(required=True)
+    role = serializers.CharField(required=True)
 
     class Meta:
         model = User
-        fields = ['full_name', 'email', 'phone', 'id_number', 'role', 'location']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'id_number', 'role', 'location']
+
+    def validate_email(self, value):
+        if not value:
+            raise serializers.ValidationError("Email is required.")
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
 
     def create(self, validated_data):
+        email = validated_data.get('email')
+        if not email:
+            raise serializers.ValidationError("Email is required to create a user.")
+
         user = User(
-            username=validated_data['email'],  # Use email as username
-            full_name=validated_data['full_name'],
-            email=validated_data['email'],
-            phone=validated_data['phone'],
+            username=email,  # <- This is the actual fix
+            email=email,
+            first_name=validated_data.get('first_name'),
+            last_name=validated_data.get('last_name'),
+            phone=validated_data.get('phone'),
             id_number=validated_data.get('id_number'),
-            role=validated_data['role'],
-            location=validated_data.get('location', ''),
-            
+            role=validated_data.get('role'),
+            location=validated_data.get('location', '')
         )
-        # No password set since password field removed
+
         if user.role != 'vendor':
             user.is_approved = True  # Auto-approve non-vendors
+
         user.save()
         return user
 
+
+
 class SetPasswordSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+
+
+class VendorSettingsSerializer(serializers.ModelSerializer):
+    address = serializers.CharField(source='location', required=False, allow_blank=True)
+    
+    class Meta:
+        model = User
+        fields = ['email', 'phone', 'address', 'email_notifications', 'sms_notifications']
+        
+    def validate(self, data):
+        # Ensure only vendors can use this serializer
+        user = self.instance
+        if user and user.role != 'vendor':
+            raise serializers.ValidationError("Only vendors can access settings.")
+        return data

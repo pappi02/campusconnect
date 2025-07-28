@@ -18,8 +18,3 @@ class ComplaintCreateSerializer(serializers.ModelSerializer):
         model = Complaint
         fields = ['order', 'description']
 
-class AnalyticsSerializer(serializers.Serializer):
-    total_users = serializers.IntegerField()
-    total_orders = serializers.IntegerField()
-    total_revenue = serializers.FloatField()
-    orders_by_status = serializers.ListField(child=serializers.DictField())

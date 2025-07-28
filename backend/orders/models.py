@@ -4,16 +4,21 @@ from products.models import Product
 
 class Order(models.Model):
     STATUS_CHOICES = (
-        ('pending', 'Pending'),
+        ('order_placed', 'Order Placed'),
+        ('accepted', 'Accepted'),
+        ('assigned', 'Assigned'),
         ('in_progress', 'In Progress'),
-        ('paid', 'Paid'),
+        ('on_the_way', 'On the Way'),
         ('delivered', 'Delivered'),
         ('cancelled', 'Cancelled'),
     )
 
+
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
+    delivery_person = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='order_placed')
     reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

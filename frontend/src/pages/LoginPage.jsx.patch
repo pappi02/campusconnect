@@ -1,0 +1,65 @@
+e.preventDefault();
+  setError("");
+
+  try {
+    const response = await api.post("/api/login/", {
+      email,
+      password,
+      vendor: isVendorLogin,
+    });
+
+    const { access, refresh, user } = response.data;
+
+    if (access && refresh && user) {
+      // Save tokens
+      if (keepLogin) {
+        localStorage.setItem("authToken", access);
+        localStorage.setItem("refreshToken", refresh);
+      }
+
+      // Call your context login to set state
+      login({ user, access, refresh });
+
+      const redirectPath =
+        window.history?.state?.usr?.from ||
+        (user.role === "vendor" ? "/vendor/dashboard" : "/home");
+
+      navigate(redirectPath, { replace: true });
+    } else {
+      setError("Invalid response from server");
+    }
+  } catch (err) {
+    if (err.response) {
+      const message =
+        err.response.data?.detail ||
+        err.response.data?.error ||
+        "Invalid credentials";
+      setError(`Login failed: ${message}`);
+    } else {
+      setError("Login failed: Network or server error");
+    }
+  }
+};
+=======
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
+
+  try {
+    const result = await login(email, password);
+
+    if (result.success) {
+      if (keepLogin) {
+        // Tokens are already saved in localStorage by AuthProvider login function
+      }
+
+      // Redirect based on user role is handled inside AuthProvider login function
+      // But we can redirect to home as fallback
+      navigate("/home", { replace: true });
+    } else {
+      setError(`Login failed: ${result.message}`);
+    }
+  } catch (err) {
+    setError("Login failed: Network or server error");
+  }
+};

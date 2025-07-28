@@ -2,8 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from .models import Payment
-from .serializers import PaymentSerializer
+from .models import Payment, VendorPayout
+from .serializers import PaymentSerializer, VendorPayoutSerializer
 from orders.models import Order
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -13,6 +13,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 import json
+from django.utils.dateparse import parse_datetime
+from rest_framework import generics, permissions
 
 
 
@@ -103,3 +105,63 @@ def paystack_webhook(request):
         return JsonResponse({'status': 'unauthorized'}, status=401)
 
    
+
+
+def handle_successful_payment(order):
+    commission_rate = 0.10  # 10%
+
+    items_by_vendor = {}
+
+    # Step 1: Group OrderItems by Vendor
+    for item in order.items.all():
+        vendor = item.product.vendor
+        items_by_vendor.setdefault(vendor, []).append(item)
+
+    # Step 2: Loop through each vendor's items
+    for vendor, items in items_by_vendor.items():
+        vendor_total = sum(item.price * item.quantity for item in items)
+        commission = vendor_total * commission_rate
+        payout_amount = vendor_total - commission
+
+        # Step 3: Save payout record
+        payout = VendorPayout.objects.create(
+            vendor=vendor,
+            amount_sent=payout_amount,
+            commission_taken=commission,
+            order_item=items[0]  # or loop + relate each
+        )
+
+        # Step 4: Send payout via Paystack
+        send_payout_to_vendor(vendor, payout_amount, order.reference)
+
+
+
+def send_payout_to_vendor(vendor, amount, reference):
+    url = "https://api.paystack.co/transfer"
+    headers = {
+        "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "source": "balance",
+        "amount": int(amount * 100),  # convert to kobo/cents
+        "recipient": vendor.recipient_code,
+        "reason": f"Payout for order {reference}"
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    if response.ok:
+        # Optionally update payout.status = 'completed'
+        return response.json()
+    else:
+        # Optionally log error + retry later
+        return {"error": "Transfer failed", "details": response.text}
+
+
+
+
+class VendorPayoutListView(generics.ListAPIView):
+    queryset = VendorPayout.objects.all().select_related('vendor', 'order_item')
+    serializer_class = VendorPayoutSerializer
+    permission_classes = [permissions.IsAdminUser]

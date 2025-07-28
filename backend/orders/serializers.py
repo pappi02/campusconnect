@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import CartItem, Cart, Coupon, Order, OrderItem
 from products.serializers import ProductSerializer
 
+
 class OrderItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(
@@ -15,7 +16,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = ['id', 'product', 'product_id', 'quantity']
 
 class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, write_only=True)
+    items = OrderItemSerializer(many=True)  # Removed write_only=True to make readable
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
@@ -55,3 +56,6 @@ class CouponSerializer(serializers.ModelSerializer):
         model = Coupon
         fields = ['id', 'code', 'amount', 'discount_percent', 'active', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+

@@ -15,6 +15,13 @@ import json
 import requests
 import random
 from django.core.mail import send_mail
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework.decorators import permission_classes
+from django.db.models import Sum
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class CouponCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -46,36 +53,25 @@ class CouponApplyView(APIView):
 
         return Response({'code': coupon.code, 'discount': discount})
 
-from rest_framework_simplejwt.authentication import JWTAuthentication
-
 class CartView(APIView):
     authentication_classes = [JWTAuthentication, SessionAuthentication]
     permission_classes = [AllowAny]  # Allow any user to access the cart
 
     def get(self, request):
-        print("===== GET /api/cart/ START =====")
-
         session_key = request.session.session_key
         if not session_key:
-            print("[DEBUG] No session key found. Creating new session...")
             request.session.create()
             session_key = request.session.session_key
-        else:
-            print(f"[DEBUG] Existing session key: {session_key}")
         
         request.session.modified = True  # Ensure session is saved
 
         session_cart = Cart.objects.filter(session_key=session_key, user=None).first()
-        print(f"[DEBUG] Found session-based cart: {session_cart.id if session_cart else 'None'}")
 
         if request.user.is_authenticated:
-            print(f"[DEBUG] Authenticated user: {request.user.email}")
             user_cart, created = Cart.objects.get_or_create(user=request.user)
-            print(f"[DEBUG] User cart ID: {user_cart.id} | Created: {created}")
 
             # Merge anonymous cart into user cart
             if session_cart and session_cart != user_cart:
-                print(f"[DEBUG] Merging session cart ({session_cart.id}) into user cart ({user_cart.id})")
                 for item in session_cart.items.all():
                     user_item, created = CartItem.objects.get_or_create(cart=user_cart, product=item.product)
                     if created:
@@ -83,72 +79,49 @@ class CartView(APIView):
                     else:
                         user_item.quantity += item.quantity
                     user_item.save()
-                    print(f"[DEBUG] Merged item: {item.product.name} | Quantity: {user_item.quantity}")
                 session_cart.delete()
-                print(f"[DEBUG] Deleted session cart: {session_cart.id}")
 
             cart = user_cart
             if cart.session_key:
-                print(f"[DEBUG] Clearing session_key from user cart (was: {cart.session_key})")
                 cart.session_key = None
                 cart.save()
         else:
             # Anonymous user — use session-based cart
-            print("[DEBUG] Anonymous user")
             cart, created = Cart.objects.get_or_create(session_key=session_key, user=None)
-            print(f"[DEBUG] Anonymous cart ID: {cart.id} | Created: {created}")
 
         serializer = CartSerializer(cart)
-        print(f"[DEBUG] Returning cart with {len(serializer.data['items'])} items")
-        print("===== GET /api/cart/ END =====\n")
-
         return Response({'cart': serializer.data})
 
     def post(self, request):
-        print("===== POST /api/cart/ START =====")
-
         product_id = request.data.get('product_id')
         quantity = int(request.data.get('quantity', 1))
-        print(f"[DEBUG] Product ID: {product_id}, Quantity: {quantity}")
 
         product = get_object_or_404(Product, id=product_id)
-        print(f"[DEBUG] Product retrieved: {product.name}")
 
         session_key = request.session.session_key
         if not session_key:
-            print("[DEBUG] No session key found, creating one...")
             request.session.create()
             session_key = request.session.session_key
-        print(f"[DEBUG] Session key: {session_key}")
         request.session.modified = True  # Ensure session is marked as modified
 
         # CART CREATION LOGIC
         if request.user.is_authenticated:
             cart, created = Cart.objects.get_or_create(user=request.user)
-            print(f"[DEBUG] Authenticated user: {request.user.email} | Cart ID: {cart.id} | Created: {created}")
             if cart.session_key:
-                print(f"[DEBUG] Clearing cart session_key from {cart.session_key}")
                 cart.session_key = None
                 cart.save()
         else:
             cart, created = Cart.objects.get_or_create(session_key=session_key, user=None)
-            print(f"[DEBUG] Anonymous user cart | Cart ID: {cart.id} | Created: {created}")
 
         # CART ITEM LOGIC
         cart_item, item_created = CartItem.objects.get_or_create(cart=cart, product=product)
         if item_created:
-            print(f"[DEBUG] New CartItem created for Product ID: {product.id}")
             cart_item.quantity = quantity
         else:
-            print(f"[DEBUG] CartItem already exists (old quantity: {cart_item.quantity})")
             cart_item.quantity += quantity
         cart_item.save()
-        print(f"[DEBUG] CartItem final quantity: {cart_item.quantity}")
 
         serializer = CartSerializer(cart)
-        print(f"[DEBUG] Cart serialized with {len(serializer.data['items'])} items")
-        print("===== POST /api/cart/ END =====\n")
-
         return Response({
             'cart': serializer.data,
             'added_product': {
@@ -159,51 +132,34 @@ class CartView(APIView):
         })
 
     def delete(self, request):
-        print("===== DELETE /api/cart/ START =====")
-
         product_id = request.data.get('product_id') or request.query_params.get('product_id')
         if not product_id:
-            print("[DEBUG] No product_id provided in DELETE request")
             return Response({'error': 'product_id is required'}, status=400)
 
         product = get_object_or_404(Product, id=product_id)
-        print(f"[DEBUG] Product to remove: {product.name}")
 
         session_key = request.session.session_key
         if not session_key:
-            print("[DEBUG] No session key found, creating one...")
             request.session.create()
             session_key = request.session.session_key
-        print(f"[DEBUG] Session key: {session_key}")
         request.session.modified = True
 
         if request.user.is_authenticated:
             cart = Cart.objects.filter(user=request.user).first()
-            print(f"[DEBUG] Authenticated user cart: {cart.id if cart else 'None'}")
         else:
             cart = Cart.objects.filter(session_key=session_key, user=None).first()
-            print(f"[DEBUG] Anonymous user cart: {cart.id if cart else 'None'}")
 
         if not cart:
-            print("[DEBUG] No cart found for user/session")
             return Response({'error': 'Cart not found'}, status=404)
 
         cart_item = CartItem.objects.filter(cart=cart, product=product).first()
         if not cart_item:
-            print("[DEBUG] CartItem not found for product in cart")
             return Response({'error': 'Cart item not found'}, status=404)
 
         cart_item.delete()
-        print(f"[DEBUG] Deleted CartItem for product: {product.name}")
 
         serializer = CartSerializer(cart)
-        print(f"[DEBUG] Returning updated cart with {len(serializer.data['items'])} items")
-        print("===== DELETE /api/cart/ END =====\n")
-
         return Response({'cart': serializer.data})
-
-
-
 
 class OrderListCreateView(generics.ListCreateAPIView):
     queryset = Order.objects.all()
@@ -215,7 +171,6 @@ class OrderListCreateView(generics.ListCreateAPIView):
         # Generate a unique reference for the order
         reference = f'ref-{random.randint(100000, 999999999)}'
         serializer.save(customer=self.request.user, reference=reference, status='pending')
-
 
 class OrderDetailView(generics.RetrieveAPIView):
     queryset = Order.objects.all()
@@ -229,5 +184,27 @@ class OrderStatusView(generics.UpdateAPIView):
     authentication_classes = [SessionAuthentication, BasicAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def clear_cart(request):
+    try:
+        cart = Cart.objects.filter(user=request.user).first()
+        if cart:
+            CartItem.objects.filter(cart=cart).delete()
+        return Response({"message": "Cart cleared successfully."})
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
 
+from campus_delivery.analytics import AnalyticsView
 
+class VendorDashboardView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        analytics_view = AnalyticsView()
+        analytics_view.request = request
+        analytics_view.format_kwarg = None
+        analytics_view.format_suffix = None
+        response = analytics_view.get(request)
+        return response

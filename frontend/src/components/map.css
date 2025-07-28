@@ -1,0 +1,23 @@
+/* Ensure map container has proper dimensions */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  z-index: 1;
+}
+
+/* Fix for map display issues */
+.map-wrapper {
+  position: relative;
+  height: 400px;
+  width: 100%;
+}
+
+/* Ensure map tiles load properly */
+.leaflet-tile {
+  filter: none !important;
+}
+
+/* Fix for marker icons */
+.leaflet-marker-icon {
+  filter: none !important;
+}

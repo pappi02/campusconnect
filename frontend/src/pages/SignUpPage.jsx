@@ -5,8 +5,12 @@ import heroImg from "../assets/hero.jpg";
 import CustomFooter from "../components/CustomFooter";
 import { showToast } from "../utils/toastUtils";
 
-const SignUpPage = () => {
+const SignUpPage = ({ vendorRegister }) => {
   const navigate = useNavigate();
+
+  // If vendorRegister prop is not passed, check query param
+  const searchParams = new URLSearchParams(window.location.search);
+  const isVendorRegister = vendorRegister || searchParams.get("vendor") === "true";
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -40,8 +44,26 @@ const SignUpPage = () => {
     }
     setLoading(true);
     try {
-      // Only send verification code without saving user data
-      await axios.post("/api/send-verification-code/", { email: formData.email });
+      // Use different API endpoint for vendor registration
+      const endpoint = isVendorRegister ? "/api/register/" : "/api/send-verification-code/";
+
+      // Transform formData to match backend expected fields
+      const payload = {
+        ...formData,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: formData.phoneCountryCode + formData.phoneNumber,
+        email: formData.email,
+        ...(isVendorRegister && { role: "vendor" }),
+      };
+
+      // Remove fields not expected by backend
+      delete payload.firstName;
+      delete payload.lastName;
+      delete payload.phoneCountryCode;
+      delete payload.phoneNumber;
+
+      await axios.post(endpoint, payload);
 
       // Show toast notification
       showToast("Verification code has been sent to your email", "success");

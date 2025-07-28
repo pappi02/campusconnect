@@ -23,6 +23,7 @@ from .views import root_view
 from .views import get_csrf_token
 import watchman
 from django.urls import path
+from campus_delivery.analytics import AnalyticsView
 
 
 
@@ -41,6 +42,7 @@ urlpatterns = [
     # Removed conflicting login path to TokenObtainPairView to avoid routing conflict
     # path('api/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/analytics/', AnalyticsView.as_view(), name='analytics'),
     path('watchman/', include('watchman.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
  
