@@ -2,7 +2,8 @@ import React, { useContext } from "react";
 import { Heart } from "lucide-react";
 import { FiShoppingCart } from "react-icons/fi";
 import { Link } from "react-router-dom";
-import { AuthContext } from "../contexts/AuthContext";
+import AuthContext from "../contexts/AuthContext";
+import api from "../api";
 
 const ProductCard = ({ product }) => {
   const { token } = useContext(AuthContext);
@@ -16,9 +17,12 @@ const ProductCard = ({ product }) => {
 
       {/* Product image */}
       <img
-        src={product.image}
+        src={product.image || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23f3f4f6'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='14' fill='%236b7280' text-anchor='middle' dominant-baseline='middle'%3ENo Image%3C/text%3E%3C/svg%3E"}
         alt={product.name}
         className="w-full h-40 object-contain mb-2 rounded-2xl"
+        onError={(e) => {
+          e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23f3f4f6'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='14' fill='%236b7280' text-anchor='middle' dominant-baseline='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
+        }}
       />
 
       {/* Wishlist and cart icons */}
@@ -33,23 +37,13 @@ const ProductCard = ({ product }) => {
             e.preventDefault();
             try {
               console.debug(`Adding product ${product.id} to cart...`);
-              const response = await fetch('http://localhost:8000/api/cart/', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                },
-                credentials: 'include', 
-                body: JSON.stringify({ product_id: product.id, quantity: 1 }),
+              const response = await api.post('/api/cart/', {
+                product_id: product.id,
+                quantity: 1
               });
 
-              if (response.ok) {
-                console.debug(`Product ${product.id} added to cart successfully.`);
-                alert(`Added product ${product.name} to cart`);
-              } else {
-                console.error(`Failed to add product ${product.id} to cart. Status: ${response.status}`);
-                alert('Failed to add product to cart');
-              }
+              console.debug(`Product ${product.id} added to cart successfully.`);
+              alert(`Added product ${product.name} to cart`);
             } catch (error) {
               console.error('Error adding product to cart:', error);
               alert('Error adding product to cart');

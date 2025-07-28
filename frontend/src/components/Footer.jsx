@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
@@ -13,6 +14,36 @@ const Footer = () => {
               <a href="#" className="social-link"><i className="fab fa-twitter"></i></a>
               <a href="#" className="social-link"><i className="fab fa-instagram"></i></a>
               <a href="#" className="social-link"><i className="fab fa-linkedin-in"></i></a>
+            </div>
+            <div className="deliver-for-us-section" style={{ marginTop: '20px' }}>
+              <Link 
+                to="/delivery/how-it-works" 
+                className="deliver-for-us-btn"
+                style={{
+                  display: 'inline-block',
+                  backgroundColor: '#fbbf24',
+                  color: '#000',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  transition: 'all 0.3s ease',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.backgroundColor = '#f59e0b';
+                  e.target.style.transform = 'translateY(-2px)';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.backgroundColor = '#fbbf24';
+                  e.target.style.transform = 'translateY(0)';
+                }}
+              >
+                <i className="fas fa-truck" style={{ marginRight: '8px' }}></i>
+                Deliver for Us
+              </Link>
             </div>
           </div>
 

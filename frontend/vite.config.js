@@ -7,11 +7,11 @@ export default defineConfig({
   plugins: [react(), UnoCSS()],
 
   server: {
-    host: true, // or use your IP directly, e.g., '192.168.1.100'
+    host: '0.0.0.0', // Allow access from any IP on the network
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://172.16.223.198:8000', // Use your network IP for backend
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }

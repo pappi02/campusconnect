@@ -1,11 +1,16 @@
 // src/components/ProductDetails/ProductDetailsCard.jsx
-import React, { useState } from "react";
+import { useState } from "react";
 import { FiShoppingCart } from "react-icons/fi";
 import { Heart } from "lucide-react";
 import axios from "../../api";
+import { useNavigate } from "react-router-dom";
+import { useContext } from "react";
+import  AuthContext  from "../../contexts/AuthContext";
 
 const ProductDetailsCard = ({ product }) => {
   const [quantity, setQuantity] = useState(1);
+  const navigate = useNavigate();
+    useContext(AuthContext);
 
   const handleAddToCart = async () => {
     try {
@@ -49,14 +54,14 @@ const ProductDetailsCard = ({ product }) => {
         <button onClick={handleAddToCart} className="bg-blue-600 text-white px-4 py-2 rounded-full flex items-center gap-2">
           <FiShoppingCart /> Add to Cart
         </button>
-        <button className="bg-black text-white px-4 py-2 rounded-full">Buy Now</button>
+        <button onClick={() => navigate("/checkout")}className="bg-black text-white px-4 py-2 rounded-full">Buy Now</button>
         <button className="text-gray-600 hover:text-yellow-400">
           <Heart />
         </button>
       </div>
 
       <div className="text-sm text-gray-400">
-        Tags: {product.tags?.join(", ")}
+        Tags: {product.tags ? (Array.isArray(product.tags) ? product.tags.join(", ") : product.tags.split(',').filter(tag => tag.trim()).map(tag => tag.trim()).join(", ")) : 'No tags'}
       </div>
     </div>
   );

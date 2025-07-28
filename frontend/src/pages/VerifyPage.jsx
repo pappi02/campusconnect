@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import axios from "../api";
 import { showToast } from "../utils/toastUtils";
 import CustomFooter from "../components/CustomFooter";
-import { AuthContext } from "../contexts/AuthContext";
+import  AuthContext  from "../contexts/AuthContext";
 
 const VerifyPage = () => {
   const navigate = useNavigate();
@@ -31,6 +31,10 @@ const VerifyPage = () => {
       const response = await axios.post("/api/verify-code/", { email, code: otp });
       if (response.status === 200) {
         setVerified(true);
+        // Redirect to vendor dashboard if role is vendor
+        if (response.data.role === "vendor") {
+          navigate("/vendor-dashboard");
+        }
       }
     } catch (error) {
       console.error("Verification error response:", error.response?.data);

@@ -1,5 +1,6 @@
 from django.db import models
-from orders.models import Order
+from orders.models import Order, User, OrderItem
+from django.contrib.auth import get_user_model
 
 class Payment(models.Model):
     STATUS_CHOICES = (
@@ -45,3 +46,18 @@ class Payment(models.Model):
         if paid_at:
             self.paid_at = paid_at
         self.save()
+
+
+
+User = get_user_model()
+
+class VendorPayout(models.Model):
+    vendor = models.ForeignKey(User, on_delete=models.CASCADE)
+    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE)
+    amount_sent = models.DecimalField(max_digits=10, decimal_places=2)
+    commission_taken = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('completed', 'Completed'), ('failed', 'Failed')], default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.vendor.email} - {self.amount_sent} ({self.status})"

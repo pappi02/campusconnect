@@ -1,7 +1,7 @@
 import { jwtDecode } from "jwt-decode"; 
 
 export const getToken = () => {
-  return localStorage.getItem("authToken");
+  return localStorage.getItem("token");
 };
 
 // Decode JWT token to get payload
