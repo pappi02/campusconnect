@@ -1,19 +1,25 @@
 from django.core.management.base import BaseCommand
 from django.conf import settings
-from delivery.services import notification_service
+from notifications.services import notification_service
+from users.models import User
+from orders.models import Order
 
 class Command(BaseCommand):
     help = 'Test Twilio SMS and WhatsApp integration'
 
     def add_arguments(self, parser):
-        parser.add_argument('phone_number', type=str, help='Phone number to test (e.g., +254712345678)')
-        parser.add_argument('--sms', action='store_true', help='Test SMS notification')
-        parser.add_argument('--whatsapp', action='store_true', help='Test WhatsApp notification')
+        parser.add_argument('phone', type=str, help='Phone number to test (e.g., +254712345678)')
+        parser.add_argument(
+            '--type',
+            type=str,
+            choices=['sms', 'whatsapp'],
+            default='sms',
+            help='Type of notification to test'
+        )
 
     def handle(self, *args, **options):
-        phone_number = options['phone_number']
-        test_sms = options['sms']
-        test_whatsapp = options['whatsapp']
+        phone = options['phone']
+        test_type = options['type']
 
         if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
             self.stdout.write(
@@ -21,13 +27,10 @@ class Command(BaseCommand):
             )
             return
 
-        if not test_sms and not test_whatsapp:
-            test_sms = True  # Default to SMS if no option specified
-
-        if test_sms:
-            self.stdout.write(f'Testing SMS to {phone_number}...')
+        if test_type == 'sms':
+            self.stdout.write(f'Testing SMS to {phone}...')
             message_sid = notification_service.send_sms(
-                phone_number,
+                phone,
                 "🚚 CampusConnect Test: This is a test SMS from your delivery system. If you received this, Twilio is working correctly!"
             )
             if message_sid:
@@ -35,10 +38,10 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.ERROR('Failed to send SMS'))
 
-        if test_whatsapp:
-            self.stdout.write(f'Testing WhatsApp to {phone_number}...')
+        elif test_type == 'whatsapp':
+            self.stdout.write(f'Testing WhatsApp to {phone}...')
             message_sid = notification_service.send_whatsapp(
-                phone_number,
+                phone,
                 "🚚 CampusConnect Test: This is a test WhatsApp message from your delivery system. If you received this, Twilio WhatsApp is working correctly!"
             )
             if message_sid:

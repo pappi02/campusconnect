@@ -1,84 +1,57 @@
 from django.conf import settings
-from twilio.rest import Client
+from notifications.services import notification_service
 import logging
+
+
 
 logger = logging.getLogger(__name__)
 
-class TwilioNotificationService:
-    """Service class for handling Twilio SMS and WhatsApp notifications"""
-    
-    def __init__(self):
-        self.client = None
-        if settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN:
-            self.client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        else:
-            logger.warning("Twilio credentials not configured")
-    
-    def send_sms(self, to_phone, message_body):
-        """Send SMS notification"""
-        if not self.client:
-            logger.warning("Twilio client not initialized")
-            return None
-            
-        try:
-            message = self.client.messages.create(
-                from_=settings.TWILIO_PHONE_NUMBER,
-                body=message_body,
-                to=f"+{to_phone}" if not str(to_phone).startswith('+') else to_phone
-            )
-            logger.info(f"SMS sent to {to_phone}: {message.sid}")
-            return message.sid
-        except Exception as e:
-            logger.error(f"Failed to send SMS to {to_phone}: {e}")
-            return None
-    
-    def send_whatsapp(self, to_phone, message_body):
-        """Send WhatsApp notification"""
-        if not self.client:
-            logger.warning("Twilio client not initialized")
-            return None
-            
-        try:
-            message = self.client.messages.create(
-                from_=f"whatsapp:{settings.TWILIO_WHATSAPP_NUMBER}",
-                body=message_body,
-                to=f"whatsapp:+{to_phone}" if not str(to_phone).startswith('+') else f"whatsapp:{to_phone}"
-            )
-            logger.info(f"WhatsApp message sent to {to_phone}: {message.sid}")
-            return message.sid
-        except Exception as e:
-            logger.error(f"Failed to send WhatsApp to {to_phone}: {e}")
-            return None
 
-# Initialize the service
-notification_service = TwilioNotificationService()
-
-def send_whatsapp_notification(delivery_person, order):
-    """
-    Sends a WhatsApp notification to a delivery person about a new order.
-    """
-    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
-        logger.warning("Twilio credentials are not configured. Skipping WhatsApp notification.")
+def send_new_order_whatsapp_alert(delivery_person, order):
+    """Send WhatsApp notification to delivery person about new order"""
+    if not delivery_person.phone:
+        logger.warning(f"Delivery person {delivery_person.id} has no phone number")
         return
-
-    client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-    recipient_phone_number = f"whatsapp:{delivery_person.phone_number}"
-    # This should be a pre-approved template on Twilio
-    message_body = f"New delivery request! Order #{order.id}. To accept, click here: https://yourdomain.com/accept/{order.id}?agent={delivery_person.id}"
     
-    try:
-        message = client.messages.create(
-            from_=f"whatsapp:{settings.TWILIO_PHONE_NUMBER}",
-            body=message_body,
-            to=recipient_phone_number
-        )
-        logger.info(f"WhatsApp notification sent to {recipient_phone_number}: {message.sid}")
-    except Exception as e:
-        logger.error(f"Failed to send WhatsApp notification to {recipient_phone_number}: {e}")
+    # Get vendor name
+    vendor_name = "a local vendor"
+    if order.items.exists():
+        vendor = order.items.first().product.vendor
+        vendor_name = f"{vendor.first_name} {vendor.last_name}".strip()
+
+    # Get delivery address
+    delivery_address = "Address not specified"
+    customer_addresses = order.customer.addresses.filter(user=order.customer)
+    if customer_addresses.exists():
+        primary_address = customer_addresses.first()
+        delivery_address = f"{primary_address.street_address}, {primary_address.city}"
+    else:
+        delivery_address = order.customer.location or "Address not specified"
+        
+    message = f"""
+*🚀 New Order Available for Delivery! 🚀*
+
+A new order has been placed and is available for you to accept.
+
+*Order Details:*
+- *Order ID:* #{order.id}
+- *From:* {vendor_name}
+- *To:* {delivery_address}
+- *Payment Status:* {order.status}
+- *Total:* KES {order.total_price}
+- *Items:* {order.items.count()} items
+
+*Action:*
+To accept this order, please visit the delivery dashboard in the app.
+
+Thank you for being a part of CampusConnect!
+"""
+    
+    return notification_service.send_whatsapp(delivery_person.phone, message.strip())
 
 def send_sms_new_order_notification(delivery_person, order):
     """Send SMS notification to delivery person about new order"""
-    if not delivery_person.phone_number:
+    if not delivery_person.phone:
         logger.warning(f"Delivery person {delivery_person.id} has no phone number")
         return
     
@@ -94,11 +67,11 @@ Distance: {order.distance_km:.1f}km
 Reply ACCEPT to take this order or visit the app.
 """
     
-    return notification_service.send_sms(delivery_person.phone_number, message.strip())
+    return notification_service.send_sms(delivery_person.phone, message.strip())
 
 def send_sms_order_accepted(order, delivery_person):
     """Send SMS to customer when order is accepted by delivery person"""
-    if not order.customer.phone_number:
+    if not order.customer.phone:
         logger.warning(f"Customer {order.customer.id} has no phone number")
         return
     
@@ -112,11 +85,11 @@ Track your order in the app
 Thank you for choosing CampusConnect!
 """
     
-    return notification_service.send_sms(order.customer.phone_number, message.strip())
+    return notification_service.send_sms(order.customer.phone, message.strip())
 
 def send_sms_order_picked_up(order):
     """Send SMS to customer when order is picked up"""
-    if not order.customer.phone_number:
+    if not order.customer.phone:
         logger.warning(f"Customer {order.customer.id} has no phone number")
         return
     
@@ -124,16 +97,16 @@ def send_sms_order_picked_up(order):
 📦 ORDER PICKED UP #{order.id}
 
 Your order has been picked up and is on the way!
-Track your delivery in real-time: https://campusconnect.com/track/{order.id}
+Track your delivery in real-time: https://localhost.com:5173/track/{order.id}
 
 Estimated arrival: 15-20 minutes
 """
     
-    return notification_service.send_sms(order.customer.phone_number, message.strip())
+    return notification_service.send_sms(order.customer.phone, message.strip())
 
 def send_sms_order_delivered(order):
     """Send SMS to customer when order is delivered"""
-    if not order.customer.phone_number:
+    if not order.customer.phone:
         logger.warning(f"Customer {order.customer.id} has no phone number")
         return
     
@@ -146,11 +119,11 @@ Please rate your delivery experience in the app.
 Thank you for using CampusConnect!
 """
     
-    return notification_service.send_sms(order.customer.phone_number, message.strip())
+    return notification_service.send_sms(order.customer.phone, message.strip())
 
 def send_sms_delivery_assignment(delivery_person, order_assignment):
     """Send SMS to delivery person about order assignment"""
-    if not delivery_person.phone_number:
+    if not delivery_person.phone:
         logger.warning(f"Delivery person {delivery_person.id} has no phone number")
         return
     
@@ -166,11 +139,11 @@ Earnings: KES {order_assignment.order.delivery_fee}
 Expires in 15 minutes - accept quickly!
 """
     
-    return notification_service.send_sms(delivery_person.phone_number, message.strip())
+    return notification_service.send_sms(delivery_person.phone, message.strip())
 
 def send_sms_earnings_update(delivery_person, amount, transaction_type):
     """Send SMS to delivery person about earnings update"""
-    if not delivery_person.phone_number:
+    if not delivery_person.phone:
         logger.warning(f"Delivery person {delivery_person.id} has no phone number")
         return
     
@@ -183,4 +156,4 @@ New balance: KES {delivery_person.delivery_profile.available_balance}
 Keep up the great work!
 """
     
-    return notification_service.send_sms(delivery_person.phone_number, message.strip())
+    return notification_service.send_sms(delivery_person.phone, message.strip())

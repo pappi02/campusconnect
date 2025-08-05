@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.utils.decorators import method_decorator
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from .permissions import IsOrderOwner
 import json
 import requests
 import random
@@ -170,19 +171,19 @@ class OrderListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         # Generate a unique reference for the order
         reference = f'ref-{random.randint(100000, 999999999)}'
-        serializer.save(customer=self.request.user, reference=reference, status='pending')
+        serializer.save(customer=self.request.user, reference=reference, status='order_placed')
 
 class OrderDetailView(generics.RetrieveAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    authentication_classes = [SessionAuthentication, BasicAuthentication, TokenAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsOrderOwner]
 
 class OrderStatusView(generics.UpdateAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderStatusSerializer
-    authentication_classes = [SessionAuthentication, BasicAuthentication, TokenAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsOrderOwner]
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

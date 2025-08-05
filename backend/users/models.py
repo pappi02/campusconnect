@@ -2,6 +2,10 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
+from django.core.validators import RegexValidator
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+import re
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -36,16 +40,21 @@ class User(AbstractBaseUser, PermissionsMixin):
         ('admin', 'Admin'),
     )
 
+    phone_regex = RegexValidator(
+        regex=r'^\+?1?\d{9,15}$',
+        message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
+    )
+
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
-    phone = models.CharField(max_length=20, unique=True)
+    phone = models.CharField(validators=[phone_regex], max_length=20, unique=True)
     id_number = models.CharField(max_length=50, unique=True, blank=True, null=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
     is_approved = models.BooleanField(default=False)  # For vendors
     location = models.CharField(max_length=255, blank=True)
     is_online = models.BooleanField(default=False)  # For delivery persons
-    
+    date_joined = models.DateTimeField(auto_now_add=True)
     # Notification preferences
     email_notifications = models.BooleanField(default=True)
     sms_notifications = models.BooleanField(default=False)
@@ -64,6 +73,16 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.full_name} ({self.role})"
+
+@receiver(pre_save, sender=User)
+def normalize_phone_number(sender, instance, **kwargs):
+    if instance.phone:
+        # Remove all non-digit characters
+        phone_digits = re.sub(r'\D', '', instance.phone)
+        # Add the country code if it's missing
+        if not phone_digits.startswith('254'):
+            phone_digits = '254' + phone_digits.lstrip('0')
+        instance.phone = '+' + phone_digits
 
 class VerificationCode(models.Model):
     email = models.EmailField()

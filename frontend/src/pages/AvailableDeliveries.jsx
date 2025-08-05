@@ -26,9 +26,9 @@ const AvailableDeliveries = () => {
     }
   };
 
-  const acceptDelivery = async (deliveryId) => {
+  const acceptDelivery = async (orderId) => {
     try {
-      await api.post(`/api/delivery/${deliveryId}/accept/`);
+      await api.post(`/api/delivery/accept/${orderId}/`);
       // Refresh the list after accepting
       fetchAvailableDeliveries();
     } catch (err) {
@@ -36,6 +36,7 @@ const AvailableDeliveries = () => {
       alert('Failed to accept delivery. Please try again.');
     }
   };
+
 
   if (loading) {
     return (
@@ -128,9 +129,10 @@ const AvailableDeliveries = () => {
                     
                     <div className="ml-4">
                       <button
-                        onClick={() => acceptDelivery(delivery.id)}
+                        onClick={() => acceptDelivery(delivery.order.id)}
                         className="bg-yellow-500 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-600 transition flex items-center"
                       >
+
                         <FaCheckCircle className="mr-2" />
                         Accept Delivery
                       </button>

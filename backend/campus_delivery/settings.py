@@ -15,7 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # =========================
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-key')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,172.16.223.198,0.0.0.0').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,172.20.9.48,172.16.223.198,169.254.129.32,0.0.0.0').split(',')
 
 # =========================
 # Installed Apps
@@ -37,14 +37,16 @@ INSTALLED_APPS = [
     'allauth.account',
 
     # Project apps
-    'users',
-    'core_admin',
-    'userauth',
-    'delivery',
-    'orders',
-    'products',
-    'payment',
-    'notifications',
+    'users.apps.UsersConfig',
+    'core_admin.apps.CoreAdminConfig',
+    'userauth.apps.UserAuthConfig',
+
+    'delivery.apps.DeliveryConfig',
+    'orders.apps.OrdersConfig',
+    'products.apps.ProductsConfig',
+    'payment.apps.PaymentConfig',
+    'notifications.apps.NotificationsConfig',
+
 ]
 
 # =========================
@@ -190,6 +192,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://172.20.9.48:5173",
     "http://172.20.4.66",
     "https://api.paystack.co",
+    "http://169.254.129.32:5173",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -200,6 +203,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://172.16.223.198:8000",
     "http://172.20.9.48:5173",
     "http://localhost:8000",
+    "http://169.254.129.32:5173", 
 ]
 
 # =========================
@@ -239,11 +243,7 @@ PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY', 'sk_live_f9dde8762fbe6473
 # OpenRouteService
 ORS_API_KEY = os.getenv('ORS_API_KEY', 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjgyMTE2OTg1ZmE0MzRjYmQ4M2E1MDQ5ZDI3NzcyMTE0IiwiaCI6Im11cm11cjY0In0=')
 
-# Africa's Talking (uncomment when needed)
-# AT_USERNAME = os.getenv('AT_USERNAME')
-# AT_API_KEY = os.getenv('AT_API_KEY')
-# AT_SENDER_ID = os.getenv('AT_SENDER_ID')
-# AT_API_KEY = os.getenv('AT_API_KEY')
+# Africa's Talking settings have been removed - using Twilio instead
 
 # =========================
 # Default Primary Key Field

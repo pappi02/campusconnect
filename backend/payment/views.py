@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -42,6 +45,9 @@ def verify_payment(request):
         response = requests.get(f'https://api.paystack.co/transaction/verify/{reference}', headers=headers)
         result = response.json()
 
+        if 'status' not in result:
+            return JsonResponse({'error': 'Invalid Paystack response'}, status=400)
+
         if not result.get('status'):
             return JsonResponse({'error': 'Invalid Paystack response'}, status=400)
 
@@ -65,19 +71,11 @@ def verify_payment(request):
                 return JsonResponse({'error': 'Order not found'}, status=404)
 
             # Save or update Payment
-            payment, created = Payment.objects.get_or_create(
-                mpesa_code=pay_data['reference'],  # we use this as unique reference
-                defaults={
-                    'order': order,
-                    'amount': float(pay_data['amount']) / 100,
-                    'status': 'completed',
-                    'gateway_response': json.dumps(pay_data),
-                    'paid_at': parse_datetime(pay_data.get('paid_at')),
-                }
-            )
+            paid_at_str = pay_data.get('paid_at')
+            paid_at = None
 
-            # Optionally update order status
-            order.status = 'paid'
+            # Update order status to order_placed after successful payment
+            order.status = 'order_placed'
             order.save()
 
             return JsonResponse({'message': 'Payment verified and saved successfully'})
@@ -93,6 +91,9 @@ def verify_payment(request):
 @csrf_exempt
 def paystack_webhook(request):
     paystack_secret_key = os.getenv("PAYSTACK_SECRET_KEY")
+    if not paystack_secret_key:
+        return JsonResponse({'status': 'error', 'message': 'PAYSTACK_SECRET_KEY not set'}, status=500)
+
     paystack_signature = request.headers.get('x-paystack-signature')
 
     computed_signature = hmac.new(
@@ -104,7 +105,7 @@ def paystack_webhook(request):
     if computed_signature != paystack_signature:
         return JsonResponse({'status': 'unauthorized'}, status=401)
 
-   
+    # ...existing code...
 
 
 def handle_successful_payment(order):

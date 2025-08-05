@@ -15,9 +15,7 @@ from .models import Address, PaymentMethod
 
 User = get_user_model()
 
-# Combined authentication (JWT + Session)
-class CombinedAuthentication(SessionAuthentication, JWTAuthentication):
-    pass
+
 
 
 
@@ -30,9 +28,10 @@ class RegisterView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        user = serializer.save()
+        user: User = serializer.save()
 
         # Set role based on request path
+
         path = request.path.lower()
         user.role = "vendor" if "vendor" in path else "customer"
 
@@ -217,8 +216,9 @@ class SetPasswordView(APIView):
                 'password': password,
             })
             if serializer.is_valid():
-                user = serializer.save()
+                user: User = serializer.save()
                 refresh = RefreshToken.for_user(user)
+
                 return Response({
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
@@ -241,13 +241,13 @@ class UpdatePasswordView(APIView):
     def put(self, request):
         user = request.user
         serializer = UpdatePasswordSerializer(data=request.data)
-        if serializer.is_valid():
-            if not user.check_password(serializer.validated_data['current_password']):
-                return Response({'current_password': ['Current password is incorrect.']}, status=status.HTTP_400_BAD_REQUEST)
-            user.set_password(serializer.validated_data['new_password'])
-            user.save()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        if not user.check_password(serializer.validated_data['current_password']):
+            return Response({'current_password': ['Current password is incorrect.']}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(serializer.validated_data['new_password'])
+        user.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 
 # --------- Address ---------
@@ -313,7 +313,8 @@ class VendorSettingsView(APIView):
         user = request.user
         
         # Check if user is a vendor
-        if user.role != 'vendor':
+        if getattr(user, 'role', None) != 'vendor':
+
             return Response(
                 {"detail": "Only vendors can access settings."}, 
                 status=status.HTTP_403_FORBIDDEN

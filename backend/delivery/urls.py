@@ -9,7 +9,6 @@ from .views import (
     DeliveryDashboardView,
     DeliveryStatusToggleView,
     AvailableDeliveriesView,
-    AcceptDeliveryView,
     AcceptOrderView,
     DeliveryEarningsView,
 
@@ -30,8 +29,9 @@ urlpatterns = [
     path('delivery/dashboard/', DeliveryDashboardView.as_view(), name='delivery-dashboard'),
     path('delivery/status/', DeliveryStatusToggleView.as_view(), name='delivery-status-toggle'),
     path('delivery/available/', AvailableDeliveriesView.as_view(), name='available-deliveries'),
-    path('delivery/<int:delivery_id>/accept/', AcceptDeliveryView.as_view(), name='accept-delivery'),
+   
     path('accept/<int:order_id>/', AcceptOrderView.as_view(), name='accept-order'),
+    path('delivery/accept/<int:order_id>/', AcceptOrderView.as_view(), name='delivery-accept-order'),
 
     path('delivery/earnings/', DeliveryEarningsView.as_view(), name='delivery-earnings'),
     path('delivery/history/', DeliveryHistoryView.as_view(), name='delivery-history'),

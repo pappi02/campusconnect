@@ -2,7 +2,8 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, QuerySet
+from typing import Any
 from .models import Complaint
 from .serializers import ComplaintSerializer, ComplaintCreateSerializer
 from users.models import User
@@ -17,30 +18,34 @@ class ComplaintCreateView(generics.CreateAPIView):
     serializer_class = ComplaintCreateSerializer
     permission_classes = [IsAuthenticated]
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: Any) -> None:
         serializer.save(user=self.request.user)
 
 class ComplaintListView(generics.ListAPIView):
     serializer_class = ComplaintSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        if self.request.user.role == 'admin':
+    def get_queryset(self) -> QuerySet[Complaint]:
+        user = self.request.user
+        # Use getattr to safely access role attribute
+        user_role = getattr(user, 'role', None)
+        if user_role == 'admin':
             return Complaint.objects.all()
-        elif self.request.user.role == 'vendor':
-            return Complaint.objects.filter(order__orderitem__product__vendor=self.request.user).distinct()
-        return Complaint.objects.filter(user=self.request.user)
+        elif user_role == 'vendor':
+            return Complaint.objects.filter(order__orderitem__product__vendor=user).distinct()
+        return Complaint.objects.filter(user=user)
 
 class ComplaintResolveView(generics.UpdateAPIView):
     queryset = Complaint.objects.all()
     serializer_class = ComplaintSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        if self.request.user.role in ('admin', 'vendor'):
+    def get_queryset(self) -> QuerySet[Complaint]:
+        user = self.request.user
+        user_role = getattr(user, 'role', None)
+        if user_role in ('admin', 'vendor'):
             return Complaint.objects.all()
         return Complaint.objects.none()
 
-    def perform_update(self, serializer):
+    def perform_update(self, serializer: Any) -> None:
         serializer.save(status='resolved')
-
