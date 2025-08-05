@@ -16,3 +16,11 @@ class IsVendorOrAdmin(permissions.BasePermission):
         if request.user.role == 'vendor' and request.user.is_approved:
             return obj.items.filter(product__vendor=request.user).exists()
         return False
+
+class IsOrderOwner(permissions.BasePermission):
+    """
+    Custom permission to only allow owners of an order to view it.
+    """
+    def has_object_permission(self, request, view, obj):
+        # Allow access if the user is the customer who placed the order
+        return obj.customer == request.user

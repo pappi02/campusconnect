@@ -17,12 +17,31 @@ class DeliveryFeeSerializer(serializers.Serializer):
     order_id = serializers.IntegerField(required=False)
     delivery_fee = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
+
+class NestedOrderSerializer(serializers.ModelSerializer):
+    delivery_address = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'delivery_address', 'status', 'total_price',
+            # Add more if needed, like 'created_at', 'items', etc.
+        ]
+    
+    def get_delivery_address(self, obj):
+        # Get the customer's primary address or first available address
+        if obj.customer and obj.customer.addresses.exists():
+            address = obj.customer.addresses.first()
+            return f"{address.street_address}, {address.city}, {address.state}"
+        return "Address not provided"
+
 class DeliverySerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
     order_total = serializers.SerializerMethodField()
-    
+    order = NestedOrderSerializer(read_only=True)  # 👈 Add this line
+
     class Meta:
         model = Delivery
         fields = [
@@ -32,6 +51,7 @@ class DeliverySerializer(serializers.ModelSerializer):
             'customer_name', 'customer_phone', 'address', 'order_total'
         ]
         read_only_fields = ['id', 'assigned_at', 'updated_at', 'total_earnings']
+
 
     def get_customer_name(self, obj):
         if obj.order and obj.order.customer:
@@ -44,8 +64,9 @@ class DeliverySerializer(serializers.ModelSerializer):
         return "No Phone"
 
     def get_address(self, obj):
-        if obj.order:
-            return obj.order.delivery_address
+        if obj.order and obj.order.customer and obj.order.customer.addresses.exists():
+            address = obj.order.customer.addresses.first()
+            return f"{address.street_address}, {address.city}, {address.state}"
         return "No Address"
 
     def get_order_total(self, obj):
@@ -53,6 +74,11 @@ class DeliverySerializer(serializers.ModelSerializer):
             return str(obj.order.total_price)
         return "0.00"
         
+
+
+
+
+
 
 class DeliveryAssignSerializer(serializers.Serializer):
     cart_id = serializers.IntegerField(required=False)
@@ -168,8 +194,9 @@ class DeliveryHistorySerializer(serializers.ModelSerializer):
         return "0.00"
     
     def get_delivery_address(self, obj):
-        if obj.order:
-            return obj.order.delivery_address
+        if obj.order and obj.order.customer and obj.order.customer.addresses.exists():
+            address = obj.order.customer.addresses.first()
+            return f"{address.street_address}, {address.city}, {address.state}"
         return "No Address"
 
 class DeliveryTransactionSerializer(serializers.ModelSerializer):
