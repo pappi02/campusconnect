@@ -1,0 +1,74 @@
+# Runs non-breaking dependency security fixes on GitHub's servers, checks the
+# build still passes, and opens a pull request. Run it from the Actions tab;
+# it also runs every Monday.
+name: Fix vulnerable dependencies
+on:
+  workflow_dispatch: null
+  schedule:
+  - cron: 0 5 * * 1
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: fix-vulnerabilities
+  cancel-in-progress: true
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-node@v5
+      with:
+        node-version: 22
+    - name: Audit and fix
+      id: fix
+      shell: bash
+      run: |
+        set +e
+        report=""
+        row() { report+="| \`$1\` | $2 | $3 | $4 |"$'\n'; }
+        verdict() { if [ "$2" -eq 0 ]; then echo "✅ passes"; elif [ "$1" -ne 0 ]; then echo "➖ was already failing (needs env vars)"; else echo "❌ broke, review before merging"; fi; }
+        for dir in . frontend; do
+          echo "::group::$dir"
+          cd "$GITHUB_WORKSPACE/$dir" || continue
+          if [ -f pnpm-lock.yaml ]; then
+            count() { pnpm audit --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const m=JSON.parse(s).metadata.vulnerabilities;console.log(`${m.critical+m.high+m.moderate+m.low} (${m.critical} critical, ${m.high} high)`)}catch{console.log("n/a")}})'; }
+            pnpm install --no-frozen-lockfile
+            before=$(count)
+            pnpm -r --if-present run build > /tmp/b0.log 2>&1; b0=$?
+            pnpm audit --fix
+            pnpm install --no-frozen-lockfile
+            after=$(count)
+            pnpm -r --if-present run build > /tmp/b1.log 2>&1; b1=$?
+          else
+            count() { npm audit --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const m=JSON.parse(s).metadata.vulnerabilities;console.log(`${m.critical+m.high+m.moderate+m.low} (${m.critical} critical, ${m.high} high)`)}catch{console.log("n/a")}})'; }
+            npm install --no-audit --no-fund
+            before=$(count)
+            npm run build --if-present > /tmp/b0.log 2>&1; b0=$?
+            npm audit fix --no-fund
+            after=$(count)
+            npm run build --if-present > /tmp/b1.log 2>&1; b1=$?
+          fi
+          row "$dir" "$before" "$after" "$(verdict $b0 $b1)"
+          echo "::endgroup::"
+        done
+        {
+          echo "report<<REPORT_EOF"
+          printf '%s' "$report"
+          echo "REPORT_EOF"
+        } >> "$GITHUB_OUTPUT"
+    - name: Open pull request
+      uses: peter-evans/create-pull-request@v7
+      with:
+        branch: security/audit-fix
+        delete-branch: true
+        commit-message: 'Security: fix vulnerable dependencies (non-breaking updates)'
+        title: 'Security: fix vulnerable dependencies'
+        body: |
+          Automated **non-breaking** dependency updates (`npm audit fix` / `pnpm audit --fix`), run on GitHub's servers.
+
+          | Folder | Vulnerabilities before | After | Build |
+          |---|---|---|---|
+          ${{ steps.fix.outputs.report }}
+          Only patch and minor updates are applied. Anything that needs a major upgrade is left for manual review.
+        labels: security
