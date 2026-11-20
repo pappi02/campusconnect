@@ -24,3 +24,4 @@ tzdata==2025.2
 urllib3==2.8.0
 openrouteservice
 twilio
+django-watchman==1.3.0
