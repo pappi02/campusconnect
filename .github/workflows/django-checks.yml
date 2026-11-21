@@ -42,6 +42,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Django system checks
         run: python manage.py check
-      # TODO: add `python manage.py migrate --noinput` back once the migration that
-      # references the removed products.Category model is fixed (a fresh database
-      # currently fails to migrate).
+      - name: Migrate a fresh database
+        run: python manage.py migrate --noinput
+      - name: No missing migrations
+        run: python manage.py makemigrations --check --dry-run
