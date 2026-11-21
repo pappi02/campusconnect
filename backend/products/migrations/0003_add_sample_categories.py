@@ -31,7 +31,7 @@ def add_sample_categories(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('products', '0001_initial'),  # Adjusted to correct existing migration
+        ('products', '0002_category_product_subcategory_alter_product_type_and_more'),  # Category is created in 0002
     ]
 
     operations = [
